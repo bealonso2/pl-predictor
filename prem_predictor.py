@@ -107,8 +107,8 @@ for x in range(sims):
                 # computing the draw constant
                 # it should be less likely to draw if one team is really good and 
                 # one team is really bad
-                draw_const = 1.3 / (1 + home-away)
-                draw = 100*(draw_const/(home + away))
+                draw_const = 0.27 + home - away #/ (1 + home - away)
+                draw = 100*(draw_const + home + away)
 
                 # using a random number generator to determine the winner
                 winner_int = random.randint(0,int(draw))
