@@ -1,17 +1,16 @@
 import json
 import random
-from unicodedata import name
 
 # adding functionality for 'FORM' by using fixtures. Right now fixtures won't change
 FORM = 0.005
 
-# this class encapsulates a premier league team
-class Team():
 
-    # name field consistant with fixtures
+# this class encapsulates a premier league team
+class Team:
+    # name field consistent with fixtures
     name = ""
 
-    # optional display name to be consistant with PL website
+    # optional display name to be consistent with PL website
     display_name = ""
 
     # the probability of a win at home and away from home
@@ -32,7 +31,7 @@ class Team():
     total_losses: int = 0
 
     # the team can be constructed using these three parameters
-    def __init__(self,name_in,display_name_in,home_prob_in,away_prob_in):
+    def __init__(self, name_in, display_name_in, home_prob_in, away_prob_in):
         self.name = name_in
         self.display_name = display_name_in
         self.home_prob = home_prob_in
@@ -68,7 +67,7 @@ class Team():
 
     # returns the display name or name if no display name
     def getDisplayName(self):
-        return self.display_name if self.display_name else self.name 
+        return self.display_name if self.display_name else self.name
 
     # function to handle wins
     def win(self):
@@ -111,23 +110,24 @@ class Team():
         self.wins = 0
         self.draws = 0
         self.losses = 0
-        
+
 
 # function to parse my input file. Paraneter is the line of the file,
 # returns a team
 def parse_team(to_parse: dict):
-    name = to_parse.get('name')
-    display_name = to_parse.get('display name')
-    home = float(to_parse.get('home'))
-    away = float(to_parse.get('away'))
+    name = to_parse.get("name")
+    display_name = to_parse.get("display name")
+    home = float(to_parse.get("home"))
+    away = float(to_parse.get("away"))
     return Team(name, display_name, home, away)
 
+
 # open fixtures file
-with open('./2022-2023/2022-2023_fixtures.json', 'r') as f:
+with open("./2022-2023/2022-2023_fixtures.json", "r") as f:
     fixtures = json.load(f)
 
 # open the input file
-with open('./2022-2023/2022-2023_teams.json', 'r') as f:
+with open("./2022-2023/2022-2023_teams.json", "r") as f:
     teams_raw: dict = json.load(f)
 
 # fill out the array of teams
@@ -142,28 +142,27 @@ f.close()
 # save season starting probablilties
 start_prob = {}
 for team_name, team in teams.items():
-    start_prob[team_name] = {"home" : team.getHome(),
-                            "away" : team.getAway()}
+    start_prob[team_name] = {"home": team.getHome(), "away": team.getAway()}
 
 # variable to set how many seasons to sim
 sims: int = 20
 for x in range(sims):
     for fixture in fixtures:
-        home_side = teams.get(fixture.get('HomeTeam'))
-        away_side = teams.get(fixture.get('AwayTeam'))
+        home_side = teams.get(fixture.get("HomeTeam"))
+        away_side = teams.get(fixture.get("AwayTeam"))
 
         home = home_side.getHome()
         away = away_side.getAway()
         # computing the draw constant
-        # it should be less likely to draw if one team is really good and 
+        # it should be less likely to draw if one team is really good and
         # one team is really bad
         # draw_const = 0.27 + home - away #/ (1 + home - away)
         total = home + away
         draw_const = 0.27 * abs(1 - home - away) / total
-        draw = 100*(draw_const + home + away)
+        draw = 100 * (draw_const + home + away)
 
         # using a random number generator to determine the winner
-        winner = random.randint(0,int(draw)) / 100.0
+        winner = random.randint(0, int(draw)) / 100.0
 
         # logic to assign points
         if winner < draw_const:
@@ -177,12 +176,12 @@ for x in range(sims):
             away_side.win()
 
     for team_name, probs in start_prob.items():
-        teams.get(team_name).reset(probs.get('home'), probs.get('away'))
+        teams.get(team_name).reset(probs.get("home"), probs.get("away"))
 
     final_order = sorted(teams.values(), reverse=True, key=lambda team: team.points)
     for team_name, team in teams.items():
         team.result(final_order.index(team) + 1)
-    
+
 
 # output into a table
 print()
@@ -192,5 +191,10 @@ print(f"{'':-<57}")
 # sort the teams by points
 final_order = sorted(teams.values(), reverse=False, key=lambda team: team.finish)
 # output the teams
-[print(f"{str(final_order.index(team) + 1) + ')':<3} {team.getDisplayName():<20.20s} {team.finish/sims:>6.1f}  {team.total_points/sims:>6.1f}  {team.total_wins/sims:4.1f}  {team.total_draws/sims:4.1f}  {team.total_losses/sims:4.1f}") for team in final_order]
+[
+    print(
+        f"{str(final_order.index(team) + 1) + ')':<3} {team.getDisplayName():<20.20s} {team.finish/sims:>6.1f}  {team.total_points/sims:>6.1f}  {team.total_wins/sims:4.1f}  {team.total_draws/sims:4.1f}  {team.total_losses/sims:4.1f}"
+    )
+    for team in final_order
+]
 print()
