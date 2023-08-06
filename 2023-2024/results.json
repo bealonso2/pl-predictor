@@ -1,0 +1,202 @@
+[
+    {
+        "Man City": {
+            "display_name": "Manchester City",
+            "finish": 32,
+            "total_points": 1828,
+            "total_wins": 599,
+            "total_draws": 31,
+            "total_losses": 130
+        }
+    },
+    {
+        "Arsenal": {
+            "display_name": "Arsenal",
+            "finish": 75,
+            "total_points": 1587,
+            "total_wins": 507,
+            "total_draws": 66,
+            "total_losses": 187
+        }
+    },
+    {
+        "Man Utd": {
+            "display_name": "Manchester United",
+            "finish": 107,
+            "total_points": 1374,
+            "total_wins": 415,
+            "total_draws": 129,
+            "total_losses": 216
+        }
+    },
+    {
+        "Newcastle": {
+            "display_name": "Newcastle United",
+            "finish": 185,
+            "total_points": 971,
+            "total_wins": 225,
+            "total_draws": 296,
+            "total_losses": 239
+        }
+    },
+    {
+        "Liverpool": {
+            "display_name": "Liverpool",
+            "finish": 37,
+            "total_points": 1820,
+            "total_wins": 596,
+            "total_draws": 32,
+            "total_losses": 132
+        }
+    },
+    {
+        "Brighton": {
+            "display_name": "Brighton and Hove Albion",
+            "finish": 225,
+            "total_points": 833,
+            "total_wins": 170,
+            "total_draws": 323,
+            "total_losses": 267
+        }
+    },
+    {
+        "Aston Villa": {
+            "display_name": "Aston Villa",
+            "finish": 222,
+            "total_points": 836,
+            "total_wins": 174,
+            "total_draws": 314,
+            "total_losses": 272
+        }
+    },
+    {
+        "Spurs": {
+            "display_name": "Tottenham Hotspur",
+            "finish": 86,
+            "total_points": 1475,
+            "total_wins": 460,
+            "total_draws": 95,
+            "total_losses": 205
+        }
+    },
+    {
+        "Brentford": {
+            "display_name": "Brentford",
+            "finish": 280,
+            "total_points": 665,
+            "total_wins": 89,
+            "total_draws": 398,
+            "total_losses": 273
+        }
+    },
+    {
+        "Fulham": {
+            "display_name": "Fulham",
+            "finish": 352,
+            "total_points": 522,
+            "total_wins": 22,
+            "total_draws": 456,
+            "total_losses": 282
+        }
+    },
+    {
+        "Crystal Palace": {
+            "display_name": "Crystal Palace",
+            "finish": 285,
+            "total_points": 643,
+            "total_wins": 77,
+            "total_draws": 412,
+            "total_losses": 271
+        }
+    },
+    {
+        "Chelsea": {
+            "display_name": "Chelsea",
+            "finish": 105,
+            "total_points": 1442,
+            "total_wins": 450,
+            "total_draws": 92,
+            "total_losses": 218
+        }
+    },
+    {
+        "Wolves": {
+            "display_name": "Wolverhampton Wanderers",
+            "finish": 315,
+            "total_points": 583,
+            "total_wins": 49,
+            "total_draws": 436,
+            "total_losses": 275
+        }
+    },
+    {
+        "West Ham": {
+            "display_name": "West Ham",
+            "finish": 139,
+            "total_points": 1249,
+            "total_wins": 356,
+            "total_draws": 181,
+            "total_losses": 223
+        }
+    },
+    {
+        "Bournemouth": {
+            "display_name": "Bournemouth",
+            "finish": 338,
+            "total_points": 546,
+            "total_wins": 31,
+            "total_draws": 453,
+            "total_losses": 276
+        }
+    },
+    {
+        "Nottingham Forest": {
+            "display_name": "Nottingham Forest",
+            "finish": 330,
+            "total_points": 565,
+            "total_wins": 40,
+            "total_draws": 445,
+            "total_losses": 275
+        }
+    },
+    {
+        "Everton": {
+            "display_name": "Everton",
+            "finish": 351,
+            "total_points": 539,
+            "total_wins": 31,
+            "total_draws": 446,
+            "total_losses": 283
+        }
+    },
+    {
+        "Burnley": {
+            "display_name": "Burnley",
+            "finish": 163,
+            "total_points": 1120,
+            "total_wins": 300,
+            "total_draws": 220,
+            "total_losses": 240
+        }
+    },
+    {
+        "Sheffield Utd": {
+            "display_name": "Sheffield United",
+            "finish": 212,
+            "total_points": 895,
+            "total_wins": 200,
+            "total_draws": 295,
+            "total_losses": 265
+        }
+    },
+    {
+        "Luton": {
+            "display_name": "Luton",
+            "finish": 361,
+            "total_points": 519,
+            "total_wins": 21,
+            "total_draws": 456,
+            "total_losses": 283
+        }
+    }
+]

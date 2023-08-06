@@ -1,3 +1,4 @@
+import csv
 import json
 from datetime import datetime
 
@@ -25,33 +26,80 @@ class PremierLeaguePredictor:
         self._seasons = seasons
 
     def _simulate_single_season(self) -> None:
+        """Simulates a single season of the Premier League by playing all fixtures
+        and then sorting the teams by points and setting their final position"""
         for fixture in self._fixtures:
             # using a random number generator to determine the winner
             fixture.play_match()
 
-            # reset the teams for the next 'season' or simulation
-            final_order = sorted(
-                self._teams, reverse=True, key=lambda team: team.points
-            )
-
-            for team in self._teams:
-                # Set the team's final position
-                team.result(final_order.index(team) + 1)
+        # reset the teams for the next 'season' or simulation
+        for position, team in enumerate(
+            sorted(self._teams, reverse=True, key=lambda team: team.points), 1
+        ):
+            # Set the team's final position
+            team.result(position)
 
     def simulate_all_seasons(self) -> None:
+        """Simulates all seasons by simulating a single season _seasons times"""
         # simulating the seasons
         for _ in range(self._seasons):
             self._simulate_single_season()
 
     def to_csv(self) -> None:
-        print("Warning: CSV output not implemented yet")
-        return
+        """Write CSV output for easy analysis in Excel or similar"""
+        teams_list = self._output_teams_list()
+
+        # Use a csv writer to output the results
+        with open(f"./{CURRENT_YEAR}-{CURRENT_YEAR + 1}/results.csv", "w") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                [
+                    "Team",
+                    "Display Name",
+                    "Finish",
+                    "Total Points",
+                    "Total Wins",
+                    "Total Draws",
+                    "Total Losses",
+                ]
+            )
+            for team in teams_list:
+                writer.writerow(
+                    [
+                        list(team.keys())[0],
+                        list(team.values())[0]["display_name"],
+                        list(team.values())[0]["finish"],
+                        list(team.values())[0]["total_points"],
+                        list(team.values())[0]["total_wins"],
+                        list(team.values())[0]["total_draws"],
+                        list(team.values())[0]["total_losses"],
+                    ]
+                )
 
     def to_json(self) -> None:
-        print("Warning: JSON output not implemented yet")
-        return
+        """Write JSON output"""
+        with open(f"./{CURRENT_YEAR}-{CURRENT_YEAR + 1}/results.json", "w") as f:
+            json.dump(self._output_teams_list(), f, indent=4)
+
+    def _output_team(self, team: Team) -> dict[str, any]:
+        """Output a single team as a dictionary"""
+        return {
+            team.name: {
+                "display_name": team.display_name,
+                "finish": team.finish,
+                "total_points": team.total_points,
+                "total_wins": team.total_wins,
+                "total_draws": team.total_draws,
+                "total_losses": team.total_losses,
+            }
+        }
+
+    def _output_teams_list(self) -> list[dict[str, any]]:
+        """Output the teams as a list of dictionaries"""
+        return [self._output_team(team) for team in self._teams]
 
     def __str__(self) -> str:
+        """Output the simulation results as a table (to be printed to the console)"""
         # output to a table
         sim_str = ""
         # header
