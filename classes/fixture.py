@@ -1,5 +1,6 @@
 import random
 
+from classes.table import Table
 from classes.team import Team
 
 
@@ -15,11 +16,13 @@ class Fixture:
         self.home = home
         self.away = away
 
-    def play_match(self) -> None:
+    def play_match(self, table: Table) -> None:
         """Function to play the match"""
         # Get the home and away probabilities
         home = self.home.home_prob
         away = self.away.away_prob
+
+        # TODO - Knock up/down the probabilities based on the table
 
         # computing the draw constant
         # it should be less likely to draw if one team is really good and
@@ -41,3 +44,6 @@ class Fixture:
         else:
             self.home.lose()
             self.away.win()
+
+        # update the table
+        table._update_table()

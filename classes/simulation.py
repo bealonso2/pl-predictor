@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 
 from classes.fixture import Fixture
+from classes.table import Table
 from classes.team import Team
 
 CURRENT_YEAR = datetime.now().year
@@ -22,22 +23,21 @@ class PremierLeaguePredictor:
         # build the teams and fixtures
         teams_dict = build_teams()
         self._fixtures = build_fixtures(teams_dict)
-        self._teams = teams_dict.values()
+        self._teams = list(teams_dict.values())
         self._seasons = seasons
 
     def _simulate_single_season(self) -> None:
         """Simulates a single season of the Premier League by playing all fixtures
         and then sorting the teams by points and setting their final position"""
+        # Set up a Table for the season
+        table = Table(self._teams)
+
         for fixture in self._fixtures:
             # using a random number generator to determine the winner
-            fixture.play_match()
+            fixture.play_match(table)
 
         # reset the teams for the next 'season' or simulation
-        for position, team in enumerate(
-            sorted(self._teams, reverse=True, key=lambda team: team.points), 1
-        ):
-            # Set the team's final position
-            team.result(position)
+        table.finalize_table()
 
     def simulate_all_seasons(self) -> None:
         """Simulates all seasons by simulating a single season _seasons times"""

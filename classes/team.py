@@ -1,7 +1,35 @@
+from dataclasses import dataclass
 from typing import Union
 
 # adding functionality for 'form' by using fixtures. Right now fixtures won't change
 FORM = 0.005
+
+
+# @dataclass
+# class LocationBasedIndex:
+#     # goal scoring and conceding rates on an average game
+#     offense: float = 0.0
+#     defense: float = 0.0
+
+
+# class PowerIndex:
+#     """Class to encapsulate the power index of a team"""
+
+#     # Home and away indexes
+#     home: LocationBasedIndex
+#     away: LocationBasedIndex
+
+#     # the power index
+#     power_index: float = 0.0
+
+#     # the power index is constructed using a team
+#     def __init__(self, team: "Team") -> None:
+#         self.team = team
+
+#     # the power index is the average of the home and away probabilities
+#     @property
+#     def power_index(self) -> float:
+#         return (self.team.home_prob + self.team.away_prob) / 2
 
 
 class Team:
@@ -21,6 +49,7 @@ class Team:
 
     # the teams stats
     points: int = 0
+    position: int = 0
     wins: int = 0
     draws: int = 0
     losses: int = 0
@@ -94,7 +123,7 @@ class Team:
         self.matches_played += 1
 
     # variable to keep track of table position
-    def result(self, finish: int) -> None:
+    def season_result(self) -> None:
         """Function to reset the teams stats and add previous season stats to
         cumulative stats
 
@@ -102,7 +131,7 @@ class Team:
             finish (int): The position the team finished in the table
         """
         # Set the fields that are cumulative
-        self.finish += finish
+        self.finish += self.position
         self.total_points += self.points
         self.total_wins += self.wins
         self.total_draws += self.draws
@@ -110,6 +139,7 @@ class Team:
 
         # Reset the team stats
         self.points = 0
+        self.position = 0
         self.wins = 0
         self.draws = 0
         self.losses = 0
