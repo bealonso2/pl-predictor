@@ -171,7 +171,8 @@ def build_teams() -> dict[str, Team]:
 
     # fill out the array of teams
     teams: dict[str, Team] = {
-        team["name"]: parse_team(team) for team in teams_raw.values()
+        team_name: parse_team(team_name, team_values)
+        for team_name, team_values in teams_raw.items()
     }
 
     return teams
@@ -201,12 +202,11 @@ def build_fixtures(teams: dict[str, Team]) -> list[Fixture]:
 
 # function to parse my input file. Parameter is the line of the file,
 # returns a team
-def parse_team(to_parse: dict):
-    name = to_parse["name"]
-    display_name = to_parse["display name"]
-    home = float(to_parse["home"])
-    away = float(to_parse["away"])
-    return Team(name, display_name, home, away)
+def parse_team(team_name: str, team_values: dict):
+    display_name = team_values["display name"]
+    home = float(team_values["home"])
+    away = float(team_values["away"])
+    return Team(team_name, display_name, home, away)
 
 
 def main():

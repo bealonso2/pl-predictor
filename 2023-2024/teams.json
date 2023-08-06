@@ -1,0 +1,89 @@
+{
+    "Man City": {
+        "display name": "Manchester City",
+        "home": "1.0",
+        "away": "1.0"
+    },
+    "Arsenal": {
+        "home": "0.7",
+        "away": "0.5"
+    },
+    "Man Utd": {
+        "display name": "Manchester United",
+        "home": "0.475",
+        "away": "0.475"
+    },
+    "Newcastle": {
+        "display name": "Newcastle United",
+        "home": "0.2915",
+        "away": "0.225"
+    },
+    "Liverpool": {
+        "home": "1.0",
+        "away": "1.0"
+    },
+    "Brighton": {
+        "display name": "Brighton and Hove Albion",
+        "home": "0.25",
+        "away": "0.175"
+    },
+    "Aston Villa": {
+        "home": "0.275",
+        "away": "0.2"
+    },
+    "Spurs": {
+        "display name": "Tottenham Hotspur",
+        "home": "0.6",
+        "away": "0.5"
+    },
+    "Brentford": {
+        "home": "0.1375",
+        "away": "0.125"
+    },
+    "Fulham": {
+        "home": "0.0725",
+        "away": "0.05"
+    },
+    "Crystal Palace": {
+        "home": "0.155",
+        "away": "0.12"
+    },
+    "Chelsea": {
+        "home": "0.55",
+        "away": "0.5"
+    },
+    "Wolves": {
+        "display name": "Wolverhampton Wanderers",
+        "home": "0.11",
+        "away": "0.05"
+    },
+    "West Ham": {
+        "home": "0.45",
+        "away": "0.33"
+    },
+    "Bournemouth": {
+        "home": "0.1",
+        "away": "0.025"
+    },
+    "Nottingham Forest": {
+        "home": "0.15",
+        "away": "0.0125"
+    },
+    "Everton": {
+        "home": "0.09",
+        "away": "0.05"
+    },
+    "Burnley": {
+        "home": "0.35",
+        "away": "0.3"
+    },
+    "Sheffield Utd": {
+        "display name": "Sheffield United",
+        "home": "0.2915",
+        "away": "0.15"
+    },
+    "Luton": {
+        "home": "0.06",
+        "away": "0.075"
+    }
+}

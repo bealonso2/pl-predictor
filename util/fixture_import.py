@@ -13,7 +13,7 @@ response = http.request("GET", url)
 
 fixtures = json.loads(response.data)
 
-jstring = json.dumps(fixtures, indent=2)
+jstring = json.dumps(fixtures, indent=4)
 
 with open(f"./{current_year}-{current_year + 1}/fixtures.json", "w") as f:
     f.write(jstring)
