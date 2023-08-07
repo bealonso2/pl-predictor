@@ -22,7 +22,12 @@ class Fixture:
         home = self.home.home_prob
         away = self.away.away_prob
 
-        # TODO - Knock up/down the probabilities based on the table
+        # Knock up/down the probabilities based on the table
+        home_modifier, away_modifier = Table.calculate_modifiers(
+            self.home, self.away, table
+        )
+        home *= home_modifier
+        away *= away_modifier
 
         # computing the draw constant
         # it should be less likely to draw if one team is really good and
