@@ -3,7 +3,7 @@ from classes.simulation import PremierLeaguePredictor
 
 def main():
     # create the simulation
-    simulation = PremierLeaguePredictor(20000)
+    simulation = PremierLeaguePredictor()
 
     # simulate the seasons
     simulation.simulate_all_seasons()

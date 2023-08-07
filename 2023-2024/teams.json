@@ -5,60 +5,60 @@
         "away": "1.0"
     },
     "Arsenal": {
-        "home": "0.7",
-        "away": "0.5"
+        "home": "0.9",
+        "away": "0.8"
     },
     "Man Utd": {
         "display name": "Manchester United",
-        "home": "0.475",
-        "away": "0.475"
+        "home": "0.7",
+        "away": "0.7"
     },
     "Newcastle": {
         "display name": "Newcastle United",
-        "home": "0.2915",
-        "away": "0.225"
+        "home": "0.5",
+        "away": "0.5"
     },
     "Liverpool": {
-        "home": "1.0",
-        "away": "1.0"
+        "home": "0.8",
+        "away": "0.5"
     },
     "Brighton": {
         "display name": "Brighton and Hove Albion",
-        "home": "0.25",
-        "away": "0.175"
+        "home": "0.5",
+        "away": "0.3"
     },
     "Aston Villa": {
-        "home": "0.275",
-        "away": "0.2"
+        "home": "0.5",
+        "away": "0.3"
     },
     "Spurs": {
         "display name": "Tottenham Hotspur",
         "home": "0.6",
-        "away": "0.5"
+        "away": "0.3"
     },
     "Brentford": {
-        "home": "0.1375",
-        "away": "0.125"
+        "home": "0.4",
+        "away": "0.3"
     },
     "Fulham": {
-        "home": "0.0725",
-        "away": "0.05"
+        "home": "0.4",
+        "away": "0.3"
     },
     "Crystal Palace": {
-        "home": "0.155",
-        "away": "0.12"
+        "home": "0.3",
+        "away": "0.3"
     },
     "Chelsea": {
-        "home": "0.55",
+        "home": "0.6",
         "away": "0.5"
     },
     "Wolves": {
         "display name": "Wolverhampton Wanderers",
-        "home": "0.11",
-        "away": "0.05"
+        "home": "0.3",
+        "away": "0.2"
     },
     "West Ham": {
-        "home": "0.45",
+        "home": "0.6",
         "away": "0.33"
     },
     "Bournemouth": {
@@ -70,20 +70,20 @@
         "away": "0.0125"
     },
     "Everton": {
-        "home": "0.09",
-        "away": "0.05"
+        "home": "0.1",
+        "away": "0.1"
     },
     "Burnley": {
-        "home": "0.35",
-        "away": "0.3"
+        "home": "0.3",
+        "away": "0.2"
     },
     "Sheffield Utd": {
         "display name": "Sheffield United",
-        "home": "0.2915",
-        "away": "0.15"
+        "home": "0.1",
+        "away": "0.1"
     },
     "Luton": {
-        "home": "0.06",
-        "away": "0.075"
+        "home": "0.1",
+        "away": "0.1"
     }
 }

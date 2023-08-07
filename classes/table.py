@@ -54,6 +54,7 @@ class Table:
 
         Right now it will just be a difference of position. The closer the teams
         are in the table, the more important the match is."""
+        # TODO - update this to take into account potential for position in the final table
         # Initialize the variables
         home_modifier = 1.0
         away_modifier = 1.0
