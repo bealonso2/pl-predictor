@@ -34,17 +34,17 @@ I started in 2020 to try and improve my python skills and learn more about data 
 
 #### Premier League Awards
 
-Golden Boot: Erling Haaland
-Golden Glove: Alison Becker
-Most Assists: Kevin De Bruyne
-Manager of the Season: Pep Guardiola
-Young Player of the Season: Bakayo Saka
+- Golden Boot: Erling Haaland
+- Golden Glove: Alison Becker
+- Most Assists: Kevin De Bruyne
+- Manager of the Season: Pep Guardiola
+- Young Player of the Season: Bakayo Saka
 
 #### Continental Trophies
 
-Champions League: Arsenal
-Europa League: Atletico Madrid
-Europa Conference League: Eintracht Frankfurt
+- Champions League: Arsenal
+- Europa League: Atletico Madrid
+- Europa Conference League: Eintracht Frankfurt
 
 ## Results
 
