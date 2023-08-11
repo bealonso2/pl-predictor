@@ -5,7 +5,7 @@
 
 I started in 2020 to try and improve my python skills and learn more about data science. While my python skills have improved, I have a long way to go with predicting the results of the Premier League.
 
-## 2023-2024 Predictions
+## 2023-2024 Predictions 🔮
 
 |   Position | Team                     |
 |-----------:|:-------------------------|
@@ -29,6 +29,19 @@ I started in 2020 to try and improve my python skills and learn more about data 
 |         18 | Luton                    |
 |         19 | Sheffield United         |
 |         20 | Bournemouth              |
+
+### Other predictions
+#### Premier League Awards
+Golden Boot: Erling Haaland
+Golden Glove: Alison Becker
+Most Assists: Kevin De Bruyne
+Manager of the Season: Pep Guardiola
+Young Player of the Season: Bakayo Saka
+
+#### Continental Trophies
+Champions League: Arsenal
+Europa League: Atletico Madrid
+Europa Conference League: Eintracht Frankfurt
 
 ## Results
 Here is how I've done so far:
