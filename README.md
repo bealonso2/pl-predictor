@@ -31,7 +31,9 @@ I started in 2020 to try and improve my python skills and learn more about data 
 |         20 | Bournemouth              |
 
 ### Other predictions
+
 #### Premier League Awards
+
 Golden Boot: Erling Haaland
 Golden Glove: Alison Becker
 Most Assists: Kevin De Bruyne
@@ -39,11 +41,13 @@ Manager of the Season: Pep Guardiola
 Young Player of the Season: Bakayo Saka
 
 #### Continental Trophies
+
 Champions League: Arsenal
 Europa League: Atletico Madrid
 Europa Conference League: Eintracht Frankfurt
 
 ## Results
+
 Here is how I've done so far:
 ![Results](./Results.png)
 
