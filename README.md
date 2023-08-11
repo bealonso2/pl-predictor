@@ -7,7 +7,7 @@ I started in 2020 to try and improve my python skills and learn more about data 
 
 ## 2023-2024 Predictions
 
-|   Position | Display Name             |
+|   Position | Team                     |
 |-----------:|:-------------------------|
 |          1 | Manchester City          |
 |          2 | Arsenal                  |
