@@ -12,10 +12,6 @@ class Table:
     def __init__(self, teams: list[Team]) -> None:
         self._teams = teams
 
-    def __str__(self) -> str:
-        """Returns a string representation of the table"""
-        # the header
-
     def _sort_teams(self):
         # Sort the teams by points, then by wins
         # TODO - update with goal difference when available
