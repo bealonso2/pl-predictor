@@ -1,2 +1,3 @@
 results.numbers
 *.env
+*__pycache__/
