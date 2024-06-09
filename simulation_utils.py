@@ -1,3 +1,5 @@
+import functools
+import re
 import pandas as pd
 import requests
 from sklearn.preprocessing import StandardScaler
@@ -23,6 +25,37 @@ def get_data_by_year(year):
     return response.json()
 
 
+def build_data_by_year(year: int) -> pd.DataFrame:
+    df = pd.DataFrame(get_data_by_year(year)["matches"])
+
+    # Drop columns we don"t need
+    df = df[["utcDate", "matchday", "homeTeam", "awayTeam", "score"]]
+
+    # Parse the homeTeam and awayTeam and get the names or ids from the column
+    df["home"] = df["homeTeam"].apply(lambda x: x["name"])
+    df["away"] = df["awayTeam"].apply(lambda x: x["name"])
+    df = df.drop(columns=["homeTeam", "awayTeam"])
+
+    # Get home team and away team scores from the dataframe, drop score column
+    df["homeScore"] = df["score"].apply(lambda x: x["fullTime"]["home"])
+    df["awayScore"] = df["score"].apply(lambda x: x["fullTime"]["away"])
+    df = df.drop(columns=["score"])
+
+    # Convert utcDate to datetime
+    df["utcDate"] = pd.to_datetime(df["utcDate"])
+
+    # Function to convert camel case to title case
+    def camel_to_title(camel_str):
+        title_str = re.sub("([A-Z])", r" \1", camel_str)
+        return title_str.title()
+
+    # Apply the function to each column name
+    df.columns = [camel_to_title(col) for col in df.columns]
+
+    return df
+
+
+@functools.lru_cache
 def get_club_value(club: str) -> float:
     response = requests.get(
         f"https://transfermarkt-api.fly.dev/clubs/search/{club.replace(' FC', '')}",
@@ -38,7 +71,7 @@ def get_club_value(club: str) -> float:
 
 
 def build_elo_df_from_dict(
-    elo_dict: dict[str, float], adjustment_factor: float = 100
+    elo_dict: dict[str, float], adjustment_factor: float = 300
 ) -> pd.DataFrame:
     # Build an elo dataframe
     elo_df = pd.DataFrame(elo_dict.items(), columns=["Team", "Elo"]).set_index("Team")
@@ -46,14 +79,26 @@ def build_elo_df_from_dict(
     # Get club values
     elo_df["Club Value"] = elo_df.index.map(get_club_value)
 
-    # Normalize the club value column
+    # Normalize the club value column to [0, 1]
     elo_df["Normalized Club Value"] = (
         elo_df["Club Value"] - elo_df["Club Value"].min()
     ) / (elo_df["Club Value"].max() - elo_df["Club Value"].min())
 
-    # Adjust the ELO ratings based on the normalized club values
+    # Apply exponential transformation
+    elo_df["Exponential Club Value"] = (
+        np.exp(elo_df["Normalized Club Value"]) - 1
+    )  # Shift to start from 0
+
+    # Re-normalize to [0, 1]
+    elo_df["Normalized Exponential Club Value"] = (
+        elo_df["Exponential Club Value"] - elo_df["Exponential Club Value"].min()
+    ) / (
+        elo_df["Exponential Club Value"].max() - elo_df["Exponential Club Value"].min()
+    )
+
+    # Adjust the ELO ratings based on the normalized exponential club values
     elo_df["Adjusted Elo"] = (
-        elo_df["Elo"] + adjustment_factor * elo_df["Normalized Club Value"]
+        elo_df["Elo"] + adjustment_factor * elo_df["Normalized Exponential Club Value"]
     )
 
     return elo_df
@@ -78,7 +123,7 @@ def process_fixture_results(
     elo = {team: 1500 for team in df["Home"].unique()}
 
     # Adjust Elo based on club value
-    elo = build_elo_df_from_dict(elo, 300)["Adjusted Elo"].to_dict()
+    elo = build_elo_df_from_dict(elo)["Adjusted Elo"].to_dict()
 
     # Process matches and update ELO ratings
     for index, row in df.iterrows():
