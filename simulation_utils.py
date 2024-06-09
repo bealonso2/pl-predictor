@@ -101,6 +101,9 @@ def build_elo_df_from_dict(
         elo_df["Elo"] + adjustment_factor * elo_df["Normalized Exponential Club Value"]
     )
 
+    # Sort by adjusted ELO
+    elo_df = elo_df.sort_values(by="Adjusted Elo", ascending=False)
+
     return elo_df
 
 
@@ -117,8 +120,11 @@ def update_elo_draw(home_elo, away_elo, k=40):
 
 
 def process_fixture_results(
-    df: pd.DataFrame, k: int = 40
+    df: pd.DataFrame, k: int = 40, half_life: int = 10
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    # Calculate the decay factor
+    decay_factor = 0.5 ** (1 / half_life)
+
     # Initialize elo ratings for each team
     elo = {team: 1500 for team in df["Home"].unique()}
 
@@ -129,18 +135,24 @@ def process_fixture_results(
     for index, row in df.iterrows():
         home_team, away_team = row["Home"], row["Away"]
 
+        # Get current ELO ratings
+        home_elo = elo[home_team]
+        away_elo = elo[away_team]
+
         if row["Home Score"] > row["Away Score"]:  # Home team won
-            elo[home_team], elo[away_team] = update_elo_win(
-                elo[home_team], elo[away_team], k
-            )
+            home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
         elif row["Away Score"] > row["Home Score"]:  # Away team won
-            elo[away_team], elo[home_team] = update_elo_win(
-                elo[away_team], elo[home_team], k
-            )
+            away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
         else:  # Draw
-            elo[home_team], elo[away_team] = update_elo_draw(
-                elo[home_team], elo[away_team], k
-            )
+            home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
+
+        # Time-decay ELO ratings, but scale towards 1500 (the starting ELO rating)
+        home_elo = home_elo * decay_factor + 1500 * (1 - decay_factor)
+        away_elo = away_elo * decay_factor + 1500 * (1 - decay_factor)
+
+        # Update ELO ratings in the dataframe and dictionary
+        elo[home_team] = home_elo
+        elo[away_team] = away_elo
 
         df.at[index, "Home Elo"] = elo[home_team]
         df.at[index, "Away Elo"] = elo[away_team]
