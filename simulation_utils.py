@@ -32,11 +32,14 @@ def get_data_by_year(year):
     return response.json()
 
 
-def build_data_by_year(year: int) -> pd.DataFrame:
+def build_data_by_year(year: int, title_case: bool = True) -> pd.DataFrame:
     df = pd.DataFrame(get_data_by_year(year)["matches"])
 
     # Drop columns we don"t need
-    df = df[["utcDate", "matchday", "homeTeam", "awayTeam", "score"]]
+    df = df[["utcDate", "status", "matchday", "homeTeam", "awayTeam", "score"]]
+
+    # Add a column for the season after the index of "utcDate"
+    df.insert(df.columns.get_loc("utcDate") + 1, "season", year)
 
     # Parse the homeTeam and awayTeam and get the names or ids from the column
     df["home"] = df["homeTeam"].apply(lambda x: x["name"])
@@ -48,6 +51,14 @@ def build_data_by_year(year: int) -> pd.DataFrame:
     df["awayScore"] = df["score"].apply(lambda x: x["fullTime"]["away"])
     df = df.drop(columns=["score"])
 
+    # Determine the winner of the match
+    df["homeOutcome"] = 1
+    df["awayOutcome"] = 1
+    df.loc[df["homeScore"] > df["awayScore"], "homeOutcome"] = 3
+    df.loc[df["homeScore"] > df["awayScore"], "awayOutcome"] = 0
+    df.loc[df["awayScore"] > df["homeScore"], "awayOutcome"] = 3
+    df.loc[df["awayScore"] > df["homeScore"], "homeOutcome"] = 0
+
     # Convert utcDate to datetime
     df["utcDate"] = pd.to_datetime(df["utcDate"])
 
@@ -56,10 +67,51 @@ def build_data_by_year(year: int) -> pd.DataFrame:
         title_str = re.sub("([A-Z])", r" \1", camel_str)
         return title_str.title()
 
+    # Function to convert camel case to snake case
+    def camel_to_snake(camel_str):
+        snake_str = re.sub("([A-Z])", r"_\1", camel_str)
+        return snake_str.lower()
+
+    case_func = camel_to_title if title_case else camel_to_snake
+
     # Apply the function to each column name
-    df.columns = [camel_to_title(col) for col in df.columns]
+    df.columns = [case_func(col) for col in df.columns]
 
     return df
+
+
+def value_str_to_float(club_value: str) -> float:
+
+    return float(
+        club_value.replace("€", "")
+        .replace("k", "000")
+        .replace("m", "0000")
+        .replace("bn", "0000000")
+        .replace(".", "")
+    )
+
+
+@functools.lru_cache
+def get_club_value_at_season(club: str, season: int) -> float:
+    response = requests.get(
+        f"https://transfermarkt-api.fly.dev/clubs/search/{club.replace(' FC', '')}",
+        headers={"accept": "application/json"},
+    )
+    club_id = response.json()["results"][0]["id"]
+
+    response = requests.get(
+        f"https://transfermarkt-api.fly.dev/clubs/{club_id}/players?season_id={season}",
+        headers={"accept": "application/json"},
+    )
+    players = response.json()["players"]
+
+    def get_market_value(player):
+        try:
+            return value_str_to_float(player["marketValue"])
+        except KeyError:
+            return 0
+
+    return sum([get_market_value(player) for player in players])
 
 
 @functools.lru_cache
@@ -69,12 +121,7 @@ def get_club_value(club: str) -> float:
         headers={"accept": "application/json"},
     )
     club_value: str = response.json()["results"][0]["marketValue"]
-    return float(
-        club_value.replace("€", "")
-        .replace("m", "0000")
-        .replace("bn", "0000000")
-        .replace(".", "")
-    )
+    return value_str_to_float(club_value)
 
 
 def build_elo_df_from_dict(
