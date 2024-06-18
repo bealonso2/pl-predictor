@@ -1,6 +1,7 @@
 from enum import Enum, auto
 import functools
 import re
+import sqlite3
 import pandas as pd
 import requests
 from sklearn.preprocessing import StandardScaler
@@ -80,6 +81,16 @@ def build_data_by_year(year: int, title_case: bool = True) -> pd.DataFrame:
     return df
 
 
+def db_get_data_by_year(year: int) -> pd.DataFrame:
+    with sqlite3.connect("data.db") as conn:
+        df = pd.read_sql(
+            f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
+        )
+
+    # TODO: add logic to find manager for each fixture
+    return df
+
+
 def value_str_to_float(club_value: str) -> float:
 
     return float(
@@ -89,6 +100,28 @@ def value_str_to_float(club_value: str) -> float:
         .replace("bn", "0000000")
         .replace(".", "")
     )
+
+
+@functools.lru_cache
+def db_get_club_value_at_season(club: str, season: int) -> float:
+    with sqlite3.connect("data.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' AND season = {season}"
+        )
+        club_value = cursor.fetchone()[0]
+    return club_value
+
+
+@functools.lru_cache
+def db_get_club_value(club: str) -> float:
+    with sqlite3.connect("data.db") as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' ORDER BY season DESC"
+        )
+        club_value = cursor.fetchone()[0]
+    return club_value
 
 
 @functools.lru_cache
@@ -125,38 +158,45 @@ def get_club_value(club: str) -> float:
 
 
 def build_elo_df_from_dict(
-    elo_dict: dict[str, float], adjustment_factor: float
+    elo_dict: dict[str, float], adjustment_factor: float, season: int = None
 ) -> pd.DataFrame:
     # Build an elo dataframe
-    elo_df = pd.DataFrame(elo_dict.items(), columns=["Team", "Elo"]).set_index("Team")
+    elo_df = pd.DataFrame(elo_dict.items(), columns=["team", "elo"]).set_index("team")
+
+    # Define a club value function based on whether a season is provided
+    club_value_function = (
+        functools.partial(db_get_club_value_at_season, season=season)
+        if season
+        else db_get_club_value
+    )
 
     # Get club values
-    elo_df["Club Value"] = elo_df.index.map(get_club_value)
+    elo_df["club_value"] = elo_df.index.map(club_value_function)
 
     # Normalize the club value column to [0, 1]
-    elo_df["Normalized Club Value"] = (
-        elo_df["Club Value"] - elo_df["Club Value"].min()
-    ) / (elo_df["Club Value"].max() - elo_df["Club Value"].min())
+    elo_df["normalized_club_value"] = (
+        elo_df["club_value"] - elo_df["club_value"].min()
+    ) / (elo_df["club_value"].max() - elo_df["club_value"].min())
 
     # Apply exponential transformation
-    elo_df["Exponential Club Value"] = (
-        np.exp(elo_df["Normalized Club Value"]) - 1
+    elo_df["exponential_club_value"] = (
+        np.exp(elo_df["normalized_club_value"]) - 1
     )  # Shift to start from 0
 
     # Re-normalize to [0, 1]
-    elo_df["Normalized Exponential Club Value"] = (
-        elo_df["Exponential Club Value"] - elo_df["Exponential Club Value"].min()
+    elo_df["normalized_exponential_club_value"] = (
+        elo_df["exponential_club_value"] - elo_df["exponential_club_value"].min()
     ) / (
-        elo_df["Exponential Club Value"].max() - elo_df["Exponential Club Value"].min()
+        elo_df["exponential_club_value"].max() - elo_df["exponential_club_value"].min()
     )
 
     # Adjust the ELO ratings based on the normalized exponential club values
-    elo_df["Adjusted Elo"] = (
-        elo_df["Elo"] + adjustment_factor * elo_df["Normalized Exponential Club Value"]
+    elo_df["adjusted_elo"] = (
+        elo_df["elo"] + adjustment_factor * elo_df["normalized_exponential_club_value"]
     )
 
     # Sort by adjusted ELO
-    elo_df = elo_df.sort_values(by="Adjusted Elo", ascending=False)
+    elo_df = elo_df.sort_values(by="adjusted_elo", ascending=False)
 
     return elo_df
 
@@ -169,32 +209,33 @@ def build_elo_between_seasons(
     # Get the ending ELO ratings for the teams in the 2022 season
     results = get_season_results(df)
     # Find teams that have been relegated/promoted by taking a difference of the two dataframes
-    df_teams = pd.concat([df["Home"], df["Away"]]).unique()
-    df_2023_teams = pd.concat([df_2023["Home"], df_2023["Away"]]).unique()
+    df_teams = pd.concat([df["home"], df["away"]]).unique()
+    df_2023_teams = pd.concat([df_2023["home"], df_2023["away"]]).unique()
 
     relegated_teams = set(df_teams) - set(df_2023_teams)
     promoted_teams = set(df_2023_teams) - set(df_teams)
     teams_with_baseline = set(df_teams) & set(df_2023_teams)
 
     # Find the average ending ELO rating for the teams that have been relegated
-    relegated_elo = results.loc[list(relegated_teams), "Total Elo"].max()
+    relegated_elo = results.loc[list(relegated_teams), "total_elo"].max()
 
     # Set the starting ELO rating for the promoted teams to the average ending ELO rating of the relegated teams
     elo = {team: relegated_elo for team in promoted_teams}
 
     # Set the starting ELO rating for the teams that have been in the league for both seasons to their ending ELO rating
-    elo.update(results.loc[list(teams_with_baseline), "Total Elo"].to_dict())
+    elo.update(results.loc[list(teams_with_baseline), "total_elo"].to_dict())
 
     # Divide Elo by 2
     elo = {team: elo[team] / 2 for team in elo}
 
+    # Gets Elo based on current club value
     elo_df = build_elo_df_from_dict(elo, club_value_adjustment_factor)
 
     return elo_df
 
 
 def get_elo_dict_from_df(df: pd.DataFrame) -> dict[str, float]:
-    return df["Adjusted Elo"].to_dict()
+    return df["adjusted_elo"].to_dict()
 
 
 def update_elo_win(winner_elo: float, loser_elo: float, k: int):
@@ -219,24 +260,27 @@ def process_fixture_results(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     if elo is None:
         # Initialize elo ratings for each team
-        elo = {team: 1500.0 for team in df["Home"].unique()}
+        elo = {team: 1500.0 for team in df["home"].unique()}
+
+        # Get the season from the first fixture
+        season = df["season"].iloc[0]
 
         # Adjust Elo based on club value
-        elo = build_elo_df_from_dict(elo, club_value_adjustment)[
-            "Adjusted Elo"
+        elo = build_elo_df_from_dict(elo, club_value_adjustment, season)[
+            "adjusted_elo"
         ].to_dict()
 
     # Process matches and update ELO ratings
     for index, row in df.iterrows():
-        home_team, away_team = row["Home"], row["Away"]
+        home_team, away_team = row["home"], row["away"]
 
         # Get current ELO ratings
         home_elo = elo[home_team]
         away_elo = elo[away_team]
 
-        if row["Home Score"] > row["Away Score"]:  # Home team won
+        if row["home_score"] > row["away_score"]:  # Home team won
             home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
-        elif row["Away Score"] > row["Home Score"]:  # Away team won
+        elif row["away_score"] > row["home_score"]:  # Away team won
             away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
         else:  # Draw
             home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
@@ -249,16 +293,8 @@ def process_fixture_results(
         elo[home_team] = home_elo
         elo[away_team] = away_elo
 
-        df.at[index, "Home Elo"] = elo[home_team]
-        df.at[index, "Away Elo"] = elo[away_team]
-
-    # Determine outcomes: 3 for win, 1 for draw, 0 for loss
-    df["Home Outcome"] = 1
-    df["Away Outcome"] = 1
-    df.loc[df["Home Score"] > df["Away Score"], "Home Outcome"] = 3
-    df.loc[df["Home Score"] > df["Away Score"], "Away Outcome"] = 0
-    df.loc[df["Away Score"] > df["Home Score"], "Away Outcome"] = 3
-    df.loc[df["Away Score"] > df["Home Score"], "Home Outcome"] = 0
+        df.at[index, "home_elo"] = elo[home_team]
+        df.at[index, "away_elo"] = elo[away_team]
 
     results = get_season_results(df)
 
@@ -291,17 +327,17 @@ def simulate_match(
 
 def get_season_results(df: pd.DataFrame) -> pd.DataFrame:
     # Aggregate results
-    home_results = df.groupby("Home").agg({"Home Outcome": "sum", "Home Elo": "last"})
-    away_results = df.groupby("Away").agg({"Away Outcome": "sum", "Away Elo": "last"})
+    home_results = df.groupby("home").agg({"home_outcome": "sum", "home_elo": "last"})
+    away_results = df.groupby("away").agg({"away_outcome": "sum", "away_elo": "last"})
     results = home_results.join(away_results, how="outer").fillna(0)
-    results["Total Outcome"] = results["Home Outcome"] + results["Away Outcome"]
-    results["Total Elo"] = results["Home Elo"] + results["Away Elo"]
+    results["total_outcome"] = results["home_outcome"] + results["away_outcome"]
+    results["total_elo"] = results["home_elo"] + results["away_elo"]
 
     # Sort by total outcome and total ELO
-    results = results.sort_values(by=["Total Outcome", "Total Elo"], ascending=False)
+    results = results.sort_values(by=["total_outcome", "total_elo"], ascending=False)
 
     # Rename Home to Team
-    results.index.name = "Team"
+    results.index.name = "team"
     return results
 
 
@@ -322,7 +358,7 @@ def simulate_season(
 
     # Can run matches in a match week concurrently in the future
     for index, row in df_2023.iterrows():
-        home_team, away_team = row["Home"], row["Away"]
+        home_team, away_team = row["home"], row["away"]
 
         # Get current Elo ratings
         home_elo = home_elo_dict[home_team]
@@ -334,16 +370,16 @@ def simulate_season(
         match outcome:
             case 3:  # Home team won
                 home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
-                df_2023.at[index, "Home Outcome"] = 3
-                df_2023.at[index, "Away Outcome"] = 0
+                df_2023.at[index, "home_outcome"] = 3
+                df_2023.at[index, "away_outcome"] = 0
             case 0:  # Away team won
                 away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
-                df_2023.at[index, "Away Outcome"] = 3
-                df_2023.at[index, "Home Outcome"] = 0
+                df_2023.at[index, "home_outcome"] = 0
+                df_2023.at[index, "away_outcome"] = 3
             case 1:  # Draw
                 home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
-                df_2023.at[index, "Home Outcome"] = 1
-                df_2023.at[index, "Away Outcome"] = 1
+                df_2023.at[index, "home_outcome"] = 1
+                df_2023.at[index, "away_outcome"] = 1
 
         # Time-decay Elo ratings
         home_elo = apply_decay_factor(home_elo, half_life, decay_method)
@@ -354,18 +390,18 @@ def simulate_season(
         away_elo_dict[away_team] = away_elo
 
         # Update actual results
-        if row["Home Score"] > row["Away Score"]:
-            df_2023.at[index, "Actual Home Outcome"] = 3
-            df_2023.at[index, "Actual Away Outcome"] = 0
-        elif row["Away Score"] > row["Home Score"]:
-            df_2023.at[index, "Actual Home Outcome"] = 0
-            df_2023.at[index, "Actual Away Outcome"] = 3
+        if row["home_score"] > row["away_score"]:
+            df_2023.at[index, "actual_home_outcome"] = 3
+            df_2023.at[index, "actual_away_outcome"] = 0
+        elif row["away_score"] > row["home_score"]:
+            df_2023.at[index, "actual_home_outcome"] = 0
+            df_2023.at[index, "actual_away_outcome"] = 3
         else:
-            df.at[index, "Actual Home Outcome"] = 1
-            df.at[index, "Actual Away Outcome"] = 1
+            df.at[index, "actual_home_outcome"] = 1
+            df.at[index, "actual_away_outcome"] = 1
 
-        df_2023.at[index, "Home Elo"] = home_elo_dict[home_team]
-        df_2023.at[index, "Away Elo"] = away_elo_dict[away_team]
+        df_2023.at[index, "home_elo"] = home_elo_dict[home_team]
+        df_2023.at[index, "away_elo"] = away_elo_dict[away_team]
 
     return df_2023
 
@@ -374,5 +410,5 @@ def simulate_season(
 def simulate_and_get_results(i, df, elo, model, scaler, k, half_life, decay_method):
     simulated_df = simulate_season(df, elo, model, scaler, k, half_life, decay_method)
     results = get_season_results(simulated_df)
-    results["Season"] = i
+    results["season"] = i
     return results
