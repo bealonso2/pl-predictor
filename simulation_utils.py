@@ -1,3 +1,4 @@
+import difflib
 from enum import Enum, auto
 import functools
 import re
@@ -87,7 +88,87 @@ def db_get_data_by_year(year: int) -> pd.DataFrame:
             f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
         )
 
-    # TODO: add logic to find manager for each fixture
+        managers_df = pd.read_sql("SELECT * FROM premier_league_managers", conn)
+
+        # Convert start and end dates to datetime
+        managers_df["start"] = pd.to_datetime(
+            managers_df["start"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
+        ).fillna(pd.Timestamp.now())
+
+        managers_df["end"] = pd.to_datetime(
+            managers_df["end"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
+        ).fillna(pd.Timestamp.now())
+
+        # Add one day to the end date
+        managers_df["end"] = managers_df["end"] + pd.Timedelta(days=1)
+
+        # Convert utc_date to datetime
+        df["utc_date"] = pd.to_datetime(
+            df["utc_date"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
+        ).fillna(pd.Timestamp.now())
+
+    def find_manager(managers_df: pd.DataFrame, team: str, date: pd.Timestamp) -> str:
+
+        # Try to find the closest team name match
+        clubs = managers_df["club"].unique()
+        team = difflib.get_close_matches(team, clubs)[0]
+        managers_df = managers_df[managers_df["club"] == team]
+
+        # Get the managers for the team at the given date
+        return managers_df[
+            (managers_df["start"] <= date.to_datetime64())
+            & (managers_df["end"] >= date.to_datetime64())
+        ]["manager"].iloc[0]
+
+    # For each fixture, find the manager of the home team
+    df["home_manager"] = df.apply(
+        lambda x: find_manager(managers_df, x["home"], x["utc_date"]), axis=1
+    )
+
+    # For each fixture, find the manager of the away team
+    df["away_manager"] = df.apply(
+        lambda x: find_manager(managers_df, x["away"], x["utc_date"]), axis=1
+    )
+
+    # Add a column to indicate the index of manager change
+    df["home_manager_count"] = 0
+    df["away_manager_count"] = 0
+
+    # Get the unique managers for each team and find the index of the manager change
+    home_managers = (
+        df[["home", "home_manager", "utc_date"]]
+        .drop_duplicates()
+        .rename(columns={"home": "team", "home_manager": "manager"})
+    )
+    away_managers = (
+        df[["away", "away_manager", "utc_date"]]
+        .drop_duplicates()
+        .rename(columns={"away": "team", "away_manager": "manager"})
+    )
+    teams_to_managers = pd.concat([home_managers, away_managers]).drop_duplicates()
+
+    for team in teams_to_managers["team"].unique():
+        managers = teams_to_managers[teams_to_managers["team"] == team][
+            ["manager", "utc_date"]
+        ]
+
+        # Sort by date
+        managers = managers.sort_values(by="utc_date")
+        managers = managers["manager"].unique()
+
+        # Skip if there is only one manager by dropping the first manager
+        managers = managers[1:]
+
+        for i, manager in enumerate(managers, 1):
+            df.loc[
+                (df["home"] == team) & (df["home_manager"] == manager),
+                "home_manager_count",
+            ] = i
+            df.loc[
+                (df["away"] == team) & (df["away_manager"] == manager),
+                "away_manager_count",
+            ] = i
+
     return df
 
 
