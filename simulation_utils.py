@@ -404,7 +404,7 @@ def simulate_match(
 ):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        x = scaler.transform([[home_elo, away_elo, 0, 0]])
+        x = scaler.transform([[home_elo, away_elo]])
     probabilities = model.predict_proba(x)
     return np.random.choice([0, 1, 3], p=probabilities[0])
 
