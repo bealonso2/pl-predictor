@@ -397,11 +397,14 @@ def apply_decay_factor(elo: float, half_life: int, decay_method: DecayMethod) ->
 
 
 def simulate_match(
-    home_elo, away_elo, model: RandomForestClassifier, scaler: StandardScaler
+    home_elo: float,
+    away_elo: float,
+    model: RandomForestClassifier,
+    scaler: StandardScaler,
 ):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        x = scaler.transform([[home_elo, away_elo]])
+        x = scaler.transform([[home_elo, away_elo, 0, 0]])
     probabilities = model.predict_proba(x)
     return np.random.choice([0, 1, 3], p=probabilities[0])
 
