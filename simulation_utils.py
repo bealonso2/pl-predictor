@@ -82,43 +82,39 @@ def build_data_by_year(year: int, title_case: bool = True) -> pd.DataFrame:
     return df
 
 
-def db_get_data_by_year(year: int) -> pd.DataFrame:
-    with sqlite3.connect("data.db") as conn:
-        df = pd.read_sql(
-            f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
-        )
+def find_manager(managers_df: pd.DataFrame, team: str, date: pd.Timestamp) -> str:
+    # Try to find the closest team name match
+    clubs = managers_df["club"].unique()
+    team = difflib.get_close_matches(team, clubs)[0]
+    managers_df = managers_df[managers_df["club"] == team]
 
+    # Get the managers for the team at the given date
+    return managers_df[
+        (managers_df["start"] <= date.to_datetime64())
+        & (managers_df["end"] >= date.to_datetime64())
+    ]["manager"].iloc[0]
+
+
+def db_add_managers_to_df(df: pd.DataFrame) -> pd.DataFrame:
+    with sqlite3.connect("data.db") as conn:
         managers_df = pd.read_sql("SELECT * FROM premier_league_managers", conn)
 
-        # Convert start and end dates to datetime
-        managers_df["start"] = pd.to_datetime(
-            managers_df["start"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
-        ).fillna(pd.Timestamp.now())
+    # Convert start and end dates to datetime
+    managers_df["start"] = pd.to_datetime(
+        managers_df["start"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
+    ).fillna(pd.Timestamp.now())
 
-        managers_df["end"] = pd.to_datetime(
-            managers_df["end"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
-        ).fillna(pd.Timestamp.now())
+    managers_df["end"] = pd.to_datetime(
+        managers_df["end"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
+    ).fillna(pd.Timestamp.now())
 
-        # Add one day to the end date
-        managers_df["end"] = managers_df["end"] + pd.Timedelta(days=1)
+    # Add one day to the end date
+    managers_df["end"] = managers_df["end"] + pd.Timedelta(days=1)
 
-        # Convert utc_date to datetime
-        df["utc_date"] = pd.to_datetime(
-            df["utc_date"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
-        ).fillna(pd.Timestamp.now())
-
-    def find_manager(managers_df: pd.DataFrame, team: str, date: pd.Timestamp) -> str:
-
-        # Try to find the closest team name match
-        clubs = managers_df["club"].unique()
-        team = difflib.get_close_matches(team, clubs)[0]
-        managers_df = managers_df[managers_df["club"] == team]
-
-        # Get the managers for the team at the given date
-        return managers_df[
-            (managers_df["start"] <= date.to_datetime64())
-            & (managers_df["end"] >= date.to_datetime64())
-        ]["manager"].iloc[0]
+    # Convert utc_date to datetime
+    df["utc_date"] = pd.to_datetime(
+        df["utc_date"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
+    ).fillna(pd.Timestamp.now())
 
     # For each fixture, find the manager of the home team
     df["home_manager"] = df.apply(
@@ -148,7 +144,7 @@ def db_get_data_by_year(year: int) -> pd.DataFrame:
     teams_to_managers = pd.concat([home_managers, away_managers]).drop_duplicates()
 
     for team in teams_to_managers["team"].unique():
-        managers = teams_to_managers[teams_to_managers["team"] == team][
+        managers: pd.DataFrame = teams_to_managers[teams_to_managers["team"] == team][
             ["manager", "utc_date"]
         ]
 
@@ -168,6 +164,18 @@ def db_get_data_by_year(year: int) -> pd.DataFrame:
                 (df["away"] == team) & (df["away_manager"] == manager),
                 "away_manager_count",
             ] = i
+
+    return df
+
+
+def db_get_data_by_year(year: int) -> pd.DataFrame:
+    with sqlite3.connect("data.db") as conn:
+        df = pd.read_sql(
+            f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
+        )
+
+    # Add managers to the dataframe
+    df = db_add_managers_to_df(df)
 
     return df
 
