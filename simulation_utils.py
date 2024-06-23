@@ -168,6 +168,37 @@ def db_add_managers_to_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_league_table_position(df: pd.DataFrame) -> pd.DataFrame:
+    """Add columns to the dataframe to indicate the league table position of
+    the home and away teams at the time of the fixture, for the given portion of
+    the dataframe.
+    """
+    df = df.copy()
+
+    for i, row in df.iterrows():
+        # Get the portion of the dataframe up to the date of the fixture
+        portion: pd.DataFrame = df[df["utc_date"] <= row["utc_date"]]
+
+        home_results = portion.groupby("home").agg({"home_outcome": "sum"})
+        away_results = portion.groupby("away").agg({"away_outcome": "sum"})
+        results = home_results.join(away_results, how="outer").fillna(0)
+        results["total_outcome"] = results["home_outcome"] + results["away_outcome"]
+
+        # Sort by total outcome
+        results = results.sort_values(by="total_outcome", ascending=False)
+
+        # Get the league table position of the home team
+        df.loc[i, "home_position"] = int(results.index.get_loc(row["home"])) + 1
+
+        # Get the league table position of the away team
+        df.loc[i, "away_position"] = int(results.index.get_loc(row["away"])) + 1
+
+    # Convert the columns to integers
+    df["home_position"] = df["home_position"].astype(int)
+    df["away_position"] = df["away_position"].astype(int)
+    return df
+
+
 def db_get_data_by_year(year: int) -> pd.DataFrame:
     with sqlite3.connect("data.db") as conn:
         df = pd.read_sql(
@@ -176,6 +207,9 @@ def db_get_data_by_year(year: int) -> pd.DataFrame:
 
     # Add managers to the dataframe
     df = db_add_managers_to_df(df)
+
+    # Add league table position to the dataframe
+    df = get_league_table_position(df)
 
     return df
 
@@ -407,12 +441,14 @@ def apply_decay_factor(elo: float, half_life: int, decay_method: DecayMethod) ->
 def simulate_match(
     home_elo: float,
     away_elo: float,
+    home_position: int,
+    away_position: int,
     model: RandomForestClassifier,
     scaler: StandardScaler,
 ):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        x = scaler.transform([[home_elo, away_elo]])
+        x = scaler.transform([[home_elo, away_elo, home_position, away_position]])
     probabilities = model.predict_proba(x)
     return np.random.choice([0, 1, 3], p=probabilities[0])
 
@@ -436,8 +472,8 @@ def get_season_results(df: pd.DataFrame) -> pd.DataFrame:
 def simulate_season(
     df: pd.DataFrame,
     elo: dict[str, float],
-    model,
-    scalar,
+    model: RandomForestClassifier,
+    scalar: StandardScaler,
     k: int,
     half_life: int,
     decay_method: DecayMethod,
@@ -448,8 +484,25 @@ def simulate_season(
     home_elo_dict = {team: elo for team, elo in elo.items()}
     away_elo_dict = {team: elo for team, elo in elo.items()}
 
+    # Initialize a dictionary to store points for each team
+    team_to_points = {team: 0 for team in df_2023["home"].unique()}
+
     # Can run matches in a match week concurrently in the future
     for index, row in df_2023.iterrows():
+        # Sort team_to_points by value descending
+        team_to_points = dict(
+            sorted(team_to_points.items(), key=lambda item: item[1], reverse=True)
+        )
+
+        # Update home and away league table positions
+        home_position = team_to_points[row["home"]]
+        away_position = team_to_points[row["away"]]
+
+        # Add home and away positions to the dataframe
+        df_2023.loc[index, "home_position"] = home_position
+        df_2023.loc[index, "away_position"] = away_position
+
+        # Get the home and away teams
         home_team, away_team = row["home"], row["away"]
 
         # Get current Elo ratings
@@ -457,7 +510,9 @@ def simulate_season(
         away_elo = away_elo_dict[away_team]
 
         # Simulate match and update ELO ratings
-        outcome = simulate_match(home_elo, away_elo, model, scalar)
+        outcome = simulate_match(
+            home_elo, away_elo, home_position, away_position, model, scalar
+        )
 
         match outcome:
             case 3:  # Home team won
@@ -483,15 +538,22 @@ def simulate_season(
 
         # Update actual results
         if row["home_score"] > row["away_score"]:
-            df_2023.at[index, "actual_home_outcome"] = 3
-            df_2023.at[index, "actual_away_outcome"] = 0
+            home_outcome = 3
+            away_outcome = 0
         elif row["away_score"] > row["home_score"]:
-            df_2023.at[index, "actual_home_outcome"] = 0
-            df_2023.at[index, "actual_away_outcome"] = 3
+            home_outcome = 0
+            away_outcome = 3
         else:
-            df.at[index, "actual_home_outcome"] = 1
-            df.at[index, "actual_away_outcome"] = 1
+            home_outcome = 1
+            away_outcome = 1
 
+        # Update points for each team
+        team_to_points[home_team] += home_outcome
+        team_to_points[away_team] += away_outcome
+
+        # Update the dataframe with the actual results
+        df_2023.at[index, "actual_home_outcome"] = home_outcome
+        df_2023.at[index, "actual_away_outcome"] = away_outcome
         df_2023.at[index, "home_elo"] = home_elo_dict[home_team]
         df_2023.at[index, "away_elo"] = away_elo_dict[away_team]
 
