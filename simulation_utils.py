@@ -3,6 +3,7 @@ from enum import Enum, auto
 import functools
 import re
 import sqlite3
+import uuid
 import pandas as pd
 import requests
 from sklearn.preprocessing import StandardScaler
@@ -566,3 +567,26 @@ def simulate_and_get_results(i, df, elo, model, scaler, k, half_life, decay_meth
     results = get_season_results(simulated_df)
     results["season"] = i
     return results
+
+
+def db_store_results(
+    average_results_df: pd.DataFrame, team_positions_df: pd.DataFrame
+) -> None:
+    # Create a simulation uuid
+    simulation_uuid = str(uuid.uuid4())
+
+    # Save the team positions to the database
+    with sqlite3.connect("data.db") as conn:
+        # Add the uuid to the dataframe
+        team_positions_df["simulation_uuid"] = simulation_uuid
+
+        # Save the dataframe to the database
+        team_positions_df.to_sql("team_positions", con=conn, if_exists="append")
+
+    # Save the average results to the database
+    with sqlite3.connect("data.db") as conn:
+        # Add the uuid to the dataframe
+        average_results_df["simulation_uuid"] = simulation_uuid
+
+        # Save the dataframe to the database
+        average_results_df.to_sql("average_results", con=conn, if_exists="append")
