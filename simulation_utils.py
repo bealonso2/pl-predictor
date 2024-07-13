@@ -1,16 +1,20 @@
 import difflib
-from enum import Enum, auto
 import functools
 import re
-import sqlite3
 import uuid
+import warnings
+from enum import Enum, auto
+
+import numpy as np
 import pandas as pd
 import requests
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
 
-import warnings
-import numpy as np
+import SlowDB
+
+S3_BUCKET = "pl-prediction"
+S3_KEY = "2024/data.db"
 
 
 class DecayMethod(Enum):
@@ -97,7 +101,7 @@ def find_manager(managers_df: pd.DataFrame, team: str, date: pd.Timestamp) -> st
 
 
 def db_add_managers_to_df(df: pd.DataFrame) -> pd.DataFrame:
-    with sqlite3.connect("data.db") as conn:
+    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
         managers_df = pd.read_sql("SELECT * FROM premier_league_managers", conn)
 
     # Convert start and end dates to datetime
@@ -201,7 +205,7 @@ def get_league_table_position(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def db_get_data_by_year(year: int) -> pd.DataFrame:
-    with sqlite3.connect("data.db") as conn:
+    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
         df = pd.read_sql(
             f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
         )
@@ -228,7 +232,7 @@ def value_str_to_float(club_value: str) -> float:
 
 @functools.lru_cache
 def db_get_club_value_at_season(club: str, season: int) -> float:
-    with sqlite3.connect("data.db") as conn:
+    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
         cursor = conn.cursor()
         cursor.execute(
             f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' AND season = {season}"
@@ -239,7 +243,7 @@ def db_get_club_value_at_season(club: str, season: int) -> float:
 
 @functools.lru_cache
 def db_get_club_value(club: str) -> float:
-    with sqlite3.connect("data.db") as conn:
+    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
         cursor = conn.cursor()
         cursor.execute(
             f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' ORDER BY season DESC"
@@ -575,16 +579,15 @@ def db_store_results(
     # Create a simulation uuid
     simulation_uuid = str(uuid.uuid4())
 
-    # Save the team positions to the database
-    with sqlite3.connect("data.db") as conn:
+    # Save the team positions and average results to the database
+    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
+
         # Add the uuid to the dataframe
         team_positions_df["simulation_uuid"] = simulation_uuid
 
         # Save the dataframe to the database
         team_positions_df.to_sql("team_positions", con=conn, if_exists="append")
 
-    # Save the average results to the database
-    with sqlite3.connect("data.db") as conn:
         # Add the uuid to the dataframe
         average_results_df["simulation_uuid"] = simulation_uuid
 
