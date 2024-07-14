@@ -574,13 +574,29 @@ def simulate_and_get_results(i, df, elo, model, scaler, k, half_life, decay_meth
 
 
 def db_store_results(
-    average_results_df: pd.DataFrame, team_positions_df: pd.DataFrame
+    season: str, average_results_df: pd.DataFrame, team_positions_df: pd.DataFrame
 ) -> None:
     # Create a simulation uuid
     simulation_uuid = str(uuid.uuid4())
 
     # Save the team positions and average results to the database
     with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
+        # Ensure the simulations table exists
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS simulations (
+                id INTEGER PRIMARY KEY,
+                uuid TEXT NOT NULL,
+                date TIMESTAMP NOT NULL,
+                season TEXT NOT NULL
+            )
+        """
+        )
+
+        # Store the simulation uuid and date in the database
+        conn.execute(
+            f"INSERT INTO simulations (uuid, date, season) VALUES ('{simulation_uuid}', CURRENT_TIMESTAMP, '{season}')"
+        )
 
         # Add the uuid to the dataframe
         team_positions_df["simulation_uuid"] = simulation_uuid
