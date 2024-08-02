@@ -1,10 +1,14 @@
+from dataclasses import dataclass
 import difflib
 import functools
+import json
 import re
 import uuid
 import warnings
-from enum import Enum, auto
+from enum import Enum
+from pathlib import Path
 
+import boto3
 import numpy as np
 import pandas as pd
 import requests
@@ -14,13 +18,24 @@ from sklearn.preprocessing import StandardScaler
 import SlowDB
 
 S3_BUCKET = "pl-prediction"
-S3_KEY = "2024/data.db"
+S3_DB_KEY = "2024/data.db"
+S3_MODEL_KEY = "2024/random_forest.joblib"
+S3_SCALER_KEY = "2024/standard_scaler.joblib"
+S3_PARAMS_KEY = "2024/best_params.json"
 
 
 class DecayMethod(Enum):
-    ZERO = auto()
-    BASE_RATING = auto()
-    MIN_BASE_CURRENT = auto()
+    ZERO = 0
+    BASE_RATING = 1
+    MIN_BASE_CURRENT = 2
+
+
+@dataclass
+class BestParams:
+    k: int
+    half_life: int
+    club_value_adjustment: float
+    decay_method: DecayMethod
 
 
 # Get API token from .env file
@@ -101,7 +116,7 @@ def find_manager(managers_df: pd.DataFrame, team: str, date: pd.Timestamp) -> st
 
 
 def db_add_managers_to_df(df: pd.DataFrame) -> pd.DataFrame:
-    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
         managers_df = pd.read_sql("SELECT * FROM premier_league_managers", conn)
 
     # Convert start and end dates to datetime
@@ -204,8 +219,24 @@ def get_league_table_position(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def db_get_data_for_latest_season() -> pd.DataFrame:
+    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
+        df = pd.read_sql(
+            "SELECT * FROM football_data_season_results WHERE season = (SELECT MAX(season) FROM football_data_season_results)",
+            conn,
+        )
+
+    # Add managers to the dataframe
+    df = db_add_managers_to_df(df)
+
+    # Add league table position to the dataframe
+    df = get_league_table_position(df)
+
+    return df
+
+
 def db_get_data_by_year(year: int) -> pd.DataFrame:
-    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
         df = pd.read_sql(
             f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
         )
@@ -232,7 +263,7 @@ def value_str_to_float(club_value: str) -> float:
 
 @functools.lru_cache
 def db_get_club_value_at_season(club: str, season: int) -> float:
-    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
         cursor = conn.cursor()
         cursor.execute(
             f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' AND season = {season}"
@@ -243,7 +274,7 @@ def db_get_club_value_at_season(club: str, season: int) -> float:
 
 @functools.lru_cache
 def db_get_club_value(club: str) -> float:
-    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
         cursor = conn.cursor()
         cursor.execute(
             f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' ORDER BY season DESC"
@@ -327,6 +358,43 @@ def build_elo_df_from_dict(
     elo_df = elo_df.sort_values(by="adjusted_elo", ascending=False)
 
     return elo_df
+
+
+def build_elo_before_season(df: pd.DataFrame) -> pd.DataFrame:
+    # Download the best parameters from S3
+    best_params = download_best_params_from_s3()
+
+    # Get the season of the dataframe
+    season_ids = df["season"].unique()
+    assert len(season_ids) == 1, "There should be only one season in the dataframe"
+    season_id = season_ids[0]
+
+    # Get the ending ELO ratings for the teams in the season
+
+    previous_season_df = db_get_data_by_year(season_id - 1)
+
+    # Process the previous season results
+    df, results = process_fixture_results(
+        df,
+        best_params.k,
+        best_params.half_life,
+        best_params.club_value_adjustment,
+        best_params.decay_method,
+        None,
+    )
+    previous_season_df, _ = process_fixture_results(
+        previous_season_df,
+        best_params.k,
+        best_params.half_life,
+        best_params.club_value_adjustment,
+        best_params.decay_method,
+        None,
+    )
+
+    # Get the ending ELO ratings for the teams in the season
+    return build_elo_between_seasons(
+        previous_season_df, df, best_params.club_value_adjustment
+    )
 
 
 def build_elo_between_seasons(
@@ -478,7 +546,7 @@ def simulate_season(
     df: pd.DataFrame,
     elo: dict[str, float],
     model: RandomForestClassifier,
-    scalar: StandardScaler,
+    scaler: StandardScaler,
     k: int,
     half_life: int,
     decay_method: DecayMethod,
@@ -516,7 +584,7 @@ def simulate_season(
 
         # Simulate match and update ELO ratings
         outcome = simulate_match(
-            home_elo, away_elo, home_position, away_position, model, scalar
+            home_elo, away_elo, home_position, away_position, model, scaler
         )
 
         match outcome:
@@ -566,11 +634,109 @@ def simulate_season(
 
 
 # Define a function to simulate a season and get results
-def simulate_and_get_results(i, df, elo, model, scaler, k, half_life, decay_method):
+def simulate_and_get_results(
+    i: int,
+    df: pd.DataFrame,
+    elo: dict[str, float],
+    model: RandomForestClassifier,
+    scaler: StandardScaler,
+    k: int = None,
+    half_life: int = None,
+    decay_method: DecayMethod = None,
+) -> pd.DataFrame:
+    # Get the best parameters from S3
+    best_params = download_best_params_from_s3()
+
+    if not k:
+        k = best_params.k
+    if not half_life:
+        half_life = best_params.half_life
+    if not decay_method:
+        decay_method = best_params.decay_method
+
     simulated_df = simulate_season(df, elo, model, scaler, k, half_life, decay_method)
     results = get_season_results(simulated_df)
     results["season"] = i
     return results
+
+
+def upload_best_params_to_s3(params: dict, should_delete: bool = False) -> None:
+    params_file = Path("best_params.json")
+
+    # Convert enum values to integers
+    for key, value in params.items():
+        if isinstance(value, Enum):
+            params[key] = value.value
+
+    with open(params_file, "w") as f:
+        json.dump(params, f)
+
+    upload_to_s3(
+        S3_BUCKET,
+        S3_PARAMS_KEY,
+        params_file,
+        params_file.read_bytes(),
+        "Best Params",
+        should_delete,
+    )
+
+
+@functools.lru_cache
+def download_best_params_from_s3() -> BestParams:
+    params_file = Path("best_params.json")
+    s3 = boto3.client("s3")
+    s3.download_file(S3_BUCKET, S3_PARAMS_KEY, str(params_file))
+
+    with open(params_file, "r") as f:
+        params = json.load(f)
+
+    # Delete the file
+    params_file.unlink()
+
+    return BestParams(
+        k=params["k"],
+        half_life=params["decay_half_life"],
+        club_value_adjustment=params["club_value_adjustment_factor"],
+        decay_method=DecayMethod(params["decay_method"]),
+    )
+
+
+def upload_model_and_scaler_to_s3(
+    model_file: str, scaler_file: str, should_delete: bool = False
+) -> None:
+    with open(model_file, "rb") as f:
+        data = f.read()
+    upload_to_s3(S3_BUCKET, S3_MODEL_KEY, model_file, data, "Model", should_delete)
+
+    with open(scaler_file, "rb") as f:
+        data = f.read()
+    upload_to_s3(S3_BUCKET, S3_SCALER_KEY, scaler_file, data, "Scaler", should_delete)
+
+
+def upload_to_s3(
+    bucket: str, key: str, file: Path, data: bytes, name: str, should_delete: bool
+) -> None:
+    s3 = boto3.client("s3")
+    response = s3.put_object(Bucket=bucket, Key=key, Body=data)
+
+    if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
+        print(f"{name.title()} uploaded to s3://{S3_BUCKET}/{S3_MODEL_KEY}")
+        if should_delete:
+            Path(file).unlink()
+    else:
+        print(f"Failed to upload {name.lower()}")
+
+
+def download_model_and_scaler_from_s3(model_file: Path, scaler_file: Path) -> None:
+    s3 = boto3.client("s3")
+
+    # Download the model
+    s3.download_file(S3_BUCKET, S3_MODEL_KEY, str(model_file))
+    print(f"Model downloaded to {model_file}")
+
+    # Download the scaler
+    s3.download_file(S3_BUCKET, S3_SCALER_KEY, str(scaler_file))
+    print(f"Scaler downloaded to {scaler_file}")
 
 
 def db_store_results(
@@ -580,7 +746,7 @@ def db_store_results(
     simulation_uuid = str(uuid.uuid4())
 
     # Save the team positions and average results to the database
-    with SlowDB.connect(S3_BUCKET, S3_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
         # Ensure the simulations table exists
         conn.execute(
             """
