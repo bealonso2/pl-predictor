@@ -375,7 +375,28 @@ def build_elo_df_from_dict(
     return elo_df
 
 
-def build_elo_before_season(df: pd.DataFrame) -> pd.DataFrame:
+def process_team_to_points(df: pd.DataFrame, teams: list) -> pd.DataFrame:
+    # If total outcome is not present, set it to 0
+    if "total_outcome" not in df.columns:
+        # Set the total outcome to 0 for all teams
+        df = pd.DataFrame(index=teams, data={"total_outcome": 0})
+
+        # Rename the index to team
+        df.index.name = "team"
+
+    # Isolate the total outcome column
+    team_to_points = df[["total_outcome"]]
+
+    # Rename the column to points
+    team_to_points = team_to_points.rename(columns={"total_outcome": "points"})
+
+    # Change the data type of the points column to int
+    team_to_points["points"] = team_to_points["points"].astype(int)
+
+    return team_to_points
+
+
+def build_elo_before_season(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     # Download the best parameters from S3
     best_params = download_best_params_from_s3()
 
@@ -406,9 +427,15 @@ def build_elo_before_season(df: pd.DataFrame) -> pd.DataFrame:
         None,
     )
 
+    # Get a list of unique teams in the current season
+    teams = pd.concat([df["home"], df["away"]]).unique()
+
     # Get the ending ELO ratings for the teams in the season
-    return build_elo_between_seasons(
-        previous_season_df, df, best_params.club_value_adjustment
+    return (
+        build_elo_between_seasons(
+            previous_season_df, df, best_params.club_value_adjustment
+        ),
+        process_team_to_points(results, teams),
     )
 
 
@@ -756,7 +783,10 @@ def download_model_and_scaler_from_s3(model_file: Path, scaler_file: Path) -> No
 
 
 def db_store_results(
-    season: str, average_results_df: pd.DataFrame, team_positions_df: pd.DataFrame
+    season: str,
+    average_results_df: pd.DataFrame,
+    team_positions_df: pd.DataFrame,
+    team_to_points_df: pd.DataFrame,
 ) -> None:
     # Create a simulation uuid
     simulation_uuid = str(uuid.uuid4())
@@ -791,3 +821,7 @@ def db_store_results(
 
         # Save the dataframe to the database
         average_results_df.to_sql("average_results", con=conn, if_exists="append")
+
+        # Add the uuid to the dataframe and save it to the database
+        team_to_points_df["simulation_uuid"] = simulation_uuid
+        team_to_points_df.to_sql("team_to_points", con=conn, if_exists="append")
