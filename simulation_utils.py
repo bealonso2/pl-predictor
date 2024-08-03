@@ -640,19 +640,10 @@ def simulate_and_get_results(
     elo: dict[str, float],
     model: RandomForestClassifier,
     scaler: StandardScaler,
-    k: int = None,
-    half_life: int = None,
-    decay_method: DecayMethod = None,
+    k: int,
+    half_life: int,
+    decay_method: DecayMethod,
 ) -> pd.DataFrame:
-    # Get the best parameters from S3
-    best_params = download_best_params_from_s3()
-
-    if not k:
-        k = best_params.k
-    if not half_life:
-        half_life = best_params.half_life
-    if not decay_method:
-        decay_method = best_params.decay_method
 
     simulated_df = simulate_season(df, elo, model, scaler, k, half_life, decay_method)
     results = get_season_results(simulated_df)
