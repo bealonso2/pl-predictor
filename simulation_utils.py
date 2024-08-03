@@ -573,17 +573,17 @@ def simulate_season(
     half_life: int,
     decay_method: DecayMethod,
 ) -> pd.DataFrame:
-    df_2023 = df.copy()
+    df = df.copy()
 
     # Get home and away elo
     home_elo_dict = {team: elo for team, elo in elo.items()}
     away_elo_dict = {team: elo for team, elo in elo.items()}
 
     # Initialize a dictionary to store points for each team
-    team_to_points = {team: 0 for team in df_2023["home"].unique()}
+    team_to_points = {team: 0 for team in df["home"].unique()}
 
     # Can run matches in a match week concurrently in the future
-    for index, row in df_2023.iterrows():
+    for index, row in df.iterrows():
         # Sort team_to_points by value descending
         team_to_points = dict(
             sorted(team_to_points.items(), key=lambda item: item[1], reverse=True)
@@ -594,8 +594,8 @@ def simulate_season(
         away_position = team_to_points[row["away"]]
 
         # Add home and away positions to the dataframe
-        df_2023.loc[index, "home_position"] = home_position
-        df_2023.loc[index, "away_position"] = away_position
+        df.loc[index, "home_position"] = home_position
+        df.loc[index, "away_position"] = away_position
 
         # Get the home and away teams
         home_team, away_team = row["home"], row["away"]
@@ -604,24 +604,45 @@ def simulate_season(
         home_elo = home_elo_dict[home_team]
         away_elo = away_elo_dict[away_team]
 
-        # Simulate match and update ELO ratings
-        outcome = simulate_match(
-            home_elo, away_elo, home_position, away_position, model, scaler
-        )
-
-        match outcome:
-            case 3:  # Home team won
+        # Based on status, update the outcome
+        if row["status"] == "FINISHED":
+            if row["home_score"] > row["away_score"]:
                 home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
-                df_2023.at[index, "home_outcome"] = 3
-                df_2023.at[index, "away_outcome"] = 0
-            case 0:  # Away team won
+                home_outcome = 3
+                away_outcome = 0
+            elif row["away_score"] > row["home_score"]:
                 away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
-                df_2023.at[index, "home_outcome"] = 0
-                df_2023.at[index, "away_outcome"] = 3
-            case 1:  # Draw
+                home_outcome = 0
+                away_outcome = 3
+            else:
                 home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
-                df_2023.at[index, "home_outcome"] = 1
-                df_2023.at[index, "away_outcome"] = 1
+                home_outcome = 1
+                away_outcome = 1
+        else:
+            # Simulate match and update ELO ratings
+            outcome = simulate_match(
+                home_elo, away_elo, home_position, away_position, model, scaler
+            )
+
+            match outcome:
+                case 3:  # Home team won
+                    home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
+                    home_outcome = 3
+                    away_outcome = 0
+                case 0:  # Away team won
+                    away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
+                    home_outcome = 0
+                    away_outcome = 3
+                case 1:  # Draw
+                    home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
+                    home_outcome = 1
+                    away_outcome = 1
+
+        # Update the dataframe with the real or simulated results
+        df.at[index, "home_elo"] = home_elo
+        df.at[index, "away_elo"] = away_elo
+        df.at[index, "home_outcome"] = home_outcome
+        df.at[index, "away_outcome"] = away_outcome
 
         # Time-decay Elo ratings
         home_elo = apply_decay_factor(home_elo, half_life, decay_method)
@@ -631,28 +652,11 @@ def simulate_season(
         home_elo_dict[home_team] = home_elo
         away_elo_dict[away_team] = away_elo
 
-        # Update actual results
-        if row["home_score"] > row["away_score"]:
-            home_outcome = 3
-            away_outcome = 0
-        elif row["away_score"] > row["home_score"]:
-            home_outcome = 0
-            away_outcome = 3
-        else:
-            home_outcome = 1
-            away_outcome = 1
-
         # Update points for each team
         team_to_points[home_team] += home_outcome
         team_to_points[away_team] += away_outcome
 
-        # Update the dataframe with the actual results
-        df_2023.at[index, "actual_home_outcome"] = home_outcome
-        df_2023.at[index, "actual_away_outcome"] = away_outcome
-        df_2023.at[index, "home_elo"] = home_elo_dict[home_team]
-        df_2023.at[index, "away_elo"] = away_elo_dict[away_team]
-
-    return df_2023
+    return df
 
 
 # Define a function to simulate a season and get results
@@ -666,7 +670,6 @@ def simulate_and_get_results(
     half_life: int,
     decay_method: DecayMethod,
 ) -> pd.DataFrame:
-
     simulated_df = simulate_season(df, elo, model, scaler, k, half_life, decay_method)
     results = get_season_results(simulated_df)
     results["season"] = i
