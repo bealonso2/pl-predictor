@@ -54,6 +54,17 @@ def get_data_by_year(year):
     return response.json()
 
 
+@functools.lru_cache
+def get_team_crests_from_season(season: int) -> pd.DataFrame:
+    uri = f"https://api.football-data.org/v4/competitions/PL/teams?season={season}"
+    response = requests.get(uri, headers=headers)
+    teams = response.json()["teams"]
+
+    # Create a dataframe from the teams
+    teams_to_crest = {team["name"]: team["crest"] for team in teams}
+    return pd.DataFrame(teams_to_crest.items(), columns=["team", "crest"])
+
+
 def build_data_by_year(year: int, title_case: bool = True) -> pd.DataFrame:
     df = pd.DataFrame(get_data_by_year(year)["matches"])
 
