@@ -81,6 +81,12 @@ def build_data_by_year(year: int, title_case: bool = True) -> pd.DataFrame:
     df.loc[df["awayScore"] > df["homeScore"], "awayOutcome"] = 3
     df.loc[df["awayScore"] > df["homeScore"], "homeOutcome"] = 0
 
+    # All matches that are not "FINISHED" should have NA for the scores and outcomes
+    df.loc[
+        df["status"] != "FINISHED",
+        ["homeScore", "awayScore", "homeOutcome", "awayOutcome"],
+    ] = np.nan
+
     # Convert utcDate to datetime
     df["utcDate"] = pd.to_datetime(df["utcDate"])
 
