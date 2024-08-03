@@ -481,8 +481,15 @@ def process_fixture_results(
             "adjusted_elo"
         ].to_dict()
 
+    # If no matches have been played, return the dataframe with the initial ELO ratings
+    if not df[df["status"] == "FINISHED"].shape[0]:
+        df["home_elo"] = df["home"].map(elo)
+        df["away_elo"] = df["away"].map(elo)
+
+        return df, pd.DataFrame()
+
     # Process matches and update ELO ratings
-    for index, row in df.iterrows():
+    for index, row in df[df["status"] == "FINISHED"].iterrows():
         home_team, away_team = row["home"], row["away"]
 
         # Get current ELO ratings
