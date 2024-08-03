@@ -242,7 +242,7 @@ def db_get_data_for_latest_season() -> pd.DataFrame:
     df = db_add_managers_to_df(df)
 
     # Make sure the dataframe is sorted by date
-    df = df.sort_values(by="utc_date")
+    df = df.sort_values(by="utc_date").reset_index(drop=True)
 
     # Add league table position to the dataframe
     df = get_league_table_position(df)
