@@ -115,32 +115,38 @@ def find_manager(managers_df: pd.DataFrame, team: str, date: pd.Timestamp) -> st
     managers_df = managers_df[managers_df["club"] == team]
 
     # Get the managers for the team at the given date
-    return managers_df[
-        (managers_df["start"] <= date.to_datetime64())
-        & (managers_df["end"] >= date.to_datetime64())
-    ]["manager"].iloc[0]
+    try:
+        return managers_df[
+            (managers_df["start"] <= date.to_datetime64())
+            & (managers_df["end"] >= date.to_datetime64())
+        ]["manager"].iloc[0]
+    except IndexError:
+        # Print the team and date for which the manager was not found
+        print(f"Manager not found for {team} at {date}")
+        return ""
 
 
 def db_add_managers_to_df(df: pd.DataFrame) -> pd.DataFrame:
     with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
         managers_df = pd.read_sql("SELECT * FROM premier_league_managers", conn)
 
+    # Convert utc_date to datetime
+    df["utc_date"] = pd.to_datetime(
+        df["utc_date"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
+    ).dt.tz_convert(None)
+
     # Convert start and end dates to datetime
     managers_df["start"] = pd.to_datetime(
         managers_df["start"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
     ).fillna(pd.Timestamp.now())
 
+    # Fill missing end dates with the latest date
     managers_df["end"] = pd.to_datetime(
         managers_df["end"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
-    ).fillna(pd.Timestamp.now())
+    ).fillna(df["utc_date"].max())
 
     # Add one day to the end date
     managers_df["end"] = managers_df["end"] + pd.Timedelta(days=1)
-
-    # Convert utc_date to datetime
-    df["utc_date"] = pd.to_datetime(
-        df["utc_date"], format="%Y-%m-%d %H:%M:%S", errors="coerce"
-    ).fillna(pd.Timestamp.now())
 
     # For each fixture, find the manager of the home team
     df["home_manager"] = df.apply(
@@ -234,6 +240,9 @@ def db_get_data_for_latest_season() -> pd.DataFrame:
 
     # Add managers to the dataframe
     df = db_add_managers_to_df(df)
+
+    # Make sure the dataframe is sorted by date
+    df = df.sort_values(by="utc_date")
 
     # Add league table position to the dataframe
     df = get_league_table_position(df)
