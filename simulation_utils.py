@@ -622,14 +622,17 @@ def simulate_season(
 
     # Can run matches in a match week concurrently in the future
     for index, row in df.iterrows():
-        # Sort team_to_points by value descending
-        team_to_points = dict(
-            sorted(team_to_points.items(), key=lambda item: item[1], reverse=True)
-        )
+        # Get the unique values of team_to_points and sort them in descending order
+        team_to_points_ranks = list(set(team_to_points.values()))
+        team_to_points_values = sorted(team_to_points_ranks, reverse=True)
 
-        # Update home and away league table positions
-        home_position = team_to_points[row["home"]]
-        away_position = team_to_points[row["away"]]
+        # Get the points for the home and away teams
+        home_points = team_to_points[row["home"]]
+        away_points = team_to_points[row["away"]]
+
+        # Update home and away league table positions based on index of team in team_to_points
+        home_position = team_to_points_values.index(home_points) + 1
+        away_position = team_to_points_values.index(away_points) + 1
 
         # Add home and away positions to the dataframe
         df.loc[index, "home_position"] = home_position
