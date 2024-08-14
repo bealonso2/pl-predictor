@@ -18,7 +18,8 @@ from sklearn.preprocessing import StandardScaler
 import SlowDB
 
 S3_BUCKET = "pl-prediction"
-S3_DB_KEY = "2024/data.db"
+S3_INFERENCE_DATA_DB_KEY = "2024/data.db"
+S3_INFERENCE_RESULTS_DB_KEY = "2024/results.db"
 S3_MODEL_KEY = "2024/random_forest.joblib"
 S3_SCALER_KEY = "2024/standard_scaler.joblib"
 S3_PARAMS_KEY = "2024/best_params.json"
@@ -138,7 +139,7 @@ def find_manager(managers_df: pd.DataFrame, team: str, date: pd.Timestamp) -> st
 
 
 def db_add_managers_to_df(df: pd.DataFrame) -> pd.DataFrame:
-    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_INFERENCE_DATA_DB_KEY, readonly=True) as conn:
         managers_df = pd.read_sql("SELECT * FROM premier_league_managers", conn)
 
     # Convert utc_date to datetime
@@ -243,7 +244,7 @@ def get_league_table_position(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def db_get_data_for_latest_season() -> pd.DataFrame:
-    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_INFERENCE_DATA_DB_KEY, readonly=True) as conn:
         df = pd.read_sql(
             "SELECT * FROM football_data_season_results WHERE season = (SELECT MAX(season) FROM football_data_season_results)",
             conn,
@@ -262,7 +263,7 @@ def db_get_data_for_latest_season() -> pd.DataFrame:
 
 
 def db_get_data_by_year(year: int) -> pd.DataFrame:
-    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_INFERENCE_DATA_DB_KEY, readonly=True) as conn:
         df = pd.read_sql(
             f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
         )
@@ -289,7 +290,7 @@ def value_str_to_float(club_value: str) -> float:
 
 @functools.lru_cache
 def db_get_club_value_at_season(club: str, season: int) -> float:
-    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_INFERENCE_DATA_DB_KEY, readonly=True) as conn:
         cursor = conn.cursor()
         cursor.execute(
             f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' AND season = {season}"
@@ -300,7 +301,7 @@ def db_get_club_value_at_season(club: str, season: int) -> float:
 
 @functools.lru_cache
 def db_get_club_value(club: str) -> float:
-    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_INFERENCE_DATA_DB_KEY, readonly=True) as conn:
         cursor = conn.cursor()
         cursor.execute(
             f"SELECT value FROM transfermarkt_club_values WHERE club = '{club}' ORDER BY season DESC"
@@ -740,7 +741,7 @@ def upload_best_params_to_s3(params: dict, should_delete: bool = False) -> None:
 
 @functools.lru_cache
 def download_best_params_from_s3() -> BestParams:
-    params_file = Path("best_params.json")
+    params_file = Path("best_params.json").resolve()
     s3 = boto3.client("s3")
     s3.download_file(S3_BUCKET, S3_PARAMS_KEY, str(params_file))
 
@@ -806,7 +807,7 @@ def db_store_results(
     simulation_uuid = str(uuid.uuid4())
 
     # Save the team positions and average results to the database
-    with SlowDB.connect(S3_BUCKET, S3_DB_KEY) as conn:
+    with SlowDB.connect(S3_BUCKET, S3_INFERENCE_RESULTS_DB_KEY) as conn:
         # Ensure the simulations table exists
         conn.execute(
             """

@@ -12,6 +12,7 @@ class SlowDB:
         s3_bucket: str,
         s3_key: str,
         local_db_path: PathLike = "local_slowdb.db",
+        readonly: bool = False,
         debug: bool = False,
     ):
         self.s3_bucket = s3_bucket
@@ -19,6 +20,7 @@ class SlowDB:
         self.local_db_path = Path(local_db_path)
         self.s3_client = boto3.client("s3")
         self.conn = None
+        self.readonly = readonly
         self.debug = debug
 
     def download_db(self):
@@ -41,6 +43,12 @@ class SlowDB:
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.readonly:
+            # If the database is read-only, we don't want to commit any changes
+            self.conn.close()
+            return
+
+        # If the database is not read-only, we'll commit the changes and upload the database
         self.conn.commit()
         self.conn.close()
         self.upload_db()
