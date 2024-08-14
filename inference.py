@@ -7,6 +7,11 @@ import joblib
 import pandas as pd
 from tqdm import tqdm
 
+from db_builder import (
+    update_manager_tenure,
+    update_results_and_club_values,
+    update_team_crests,
+)
 from simulation_utils import (
     build_elo_before_season,
     db_get_data_for_latest_season,
@@ -17,10 +22,14 @@ from simulation_utils import (
     simulate_and_get_results,
 )
 
+# Define the seasons I need data for
+SEASONS = [2024]
+
 
 def main():
-    # Create an argument parser with the optional argument --num_simulations -n
+    # Create an argument parser
     parser = argparse.ArgumentParser()
+    # Add an argument for the number of simulations to run
     parser.add_argument(
         "-n",
         "--num_simulations",
@@ -28,10 +37,27 @@ def main():
         default=10,
         help="Number of simulations to run",
     )
+    # Add an argument to update club values
+    parser.add_argument(
+        "-u",
+        "--update_club_values",
+        action="store_true",
+        help="Update club values in the database",
+    )
+
+    # Parse the arguments
     args = parser.parse_args()
 
     # Number of simulations to run
     num_simulations = args.num_simulations
+
+    # Update club values in the database
+    update_club_values = args.update_club_values
+
+    # Build the data for the latest season
+    update_results_and_club_values(SEASONS, update_club_values)
+    update_manager_tenure()
+    update_team_crests()
 
     # Get data for the latest season
     df = db_get_data_for_latest_season()
