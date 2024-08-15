@@ -46,12 +46,13 @@ class SlowDB:
         if self.readonly:
             # If the database is read-only, we don't want to commit any changes
             self.conn.close()
-            return
+        else:
+            # If the database is not read-only, we'll commit the changes and upload the database
+            self.conn.commit()
+            self.conn.close()
+            self.upload_db()
 
-        # If the database is not read-only, we'll commit the changes and upload the database
-        self.conn.commit()
-        self.conn.close()
-        self.upload_db()
+        # If we're not in debug mode, we'll delete the local database
         if self.local_db_path.exists() and not self.debug:
             self.local_db_path.unlink()
 
