@@ -104,7 +104,7 @@ def update_results(seasons: list[int]) -> pd.DataFrame:
 
 def update_results_and_club_values(
     seasons: list[int], update_club_values: bool
-) -> None:
+) -> tuple[pd.DataFrame, pd.DataFrame | None]:
     """
     Update the club values in the database after updating the results
     """
@@ -113,7 +113,7 @@ def update_results_and_club_values(
 
     if not update_club_values:
         print("Club values not updated")
-        return results_df
+        return results_df, None
 
     # Get unique club names minus FC
     clubs = results_df["home"].unique()
@@ -142,6 +142,8 @@ def update_results_and_club_values(
     transfers_df = update_or_insert_data(
         "transfermarkt_club_values", ["club", "season"], transfers_df
     )
+
+    return results_df, transfers_df
 
 
 def update_manager_tenure():
