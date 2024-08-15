@@ -221,21 +221,41 @@ def get_league_table_position(df: pd.DataFrame) -> pd.DataFrame:
 
     for i, row in df.iterrows():
         # Get the portion of the dataframe up to the date of the fixture
-        portion: pd.DataFrame = df[df["utc_date"] <= row["utc_date"]]
+        portion: pd.DataFrame = df[df["utc_date"] < row["utc_date"]]
 
         home_results = portion.groupby("home").agg({"home_outcome": "sum"})
         away_results = portion.groupby("away").agg({"away_outcome": "sum"})
         results = home_results.join(away_results, how="outer").fillna(0)
         results["total_outcome"] = results["home_outcome"] + results["away_outcome"]
 
-        # Sort by total outcome
+        # Rank the teams by total outcome
         results = results.sort_values(by="total_outcome", ascending=False)
 
-        # Get the league table position of the home team
-        df.loc[i, "home_position"] = int(results.index.get_loc(row["home"])) + 1
+        if row["home"] not in results.index or row["away"] not in results.index:
+            # Get the number of unique values in the total outcome column
+            unique_outcomes = results[results["total_outcome"] > 0][
+                "total_outcome"
+            ].nunique()
 
-        # Get the league table position of the away team
-        df.loc[i, "away_position"] = int(results.index.get_loc(row["away"])) + 1
+            # Next free position is the number of unique outcomes + 1
+            next_free_position = unique_outcomes + 1
+            df.loc[i, "home_position"] = next_free_position
+            df.loc[i, "away_position"] = next_free_position
+            continue
+
+        # Get the league table position of the home team at the time of the fixture including ties
+        home_total_outcome = results.loc[row["home"], "total_outcome"]
+        home_index = results.index.get_loc(
+            results[results["total_outcome"] == home_total_outcome].iloc[0].name
+        )
+        df.loc[i, "home_position"] = home_index + 1
+
+        # Get the league table position of the away team at the time of the fixture including ties
+        away_total_outcome = results.loc[row["away"], "total_outcome"]
+        away_index = results.index.get_loc(
+            results[results["total_outcome"] == away_total_outcome].iloc[0].name
+        )
+        df.loc[i, "away_position"] = away_index + 1
 
     # Convert the columns to integers
     df["home_position"] = df["home_position"].astype(int)
@@ -250,16 +270,8 @@ def db_get_data_for_latest_season() -> pd.DataFrame:
             conn,
         )
 
-    # Add managers to the dataframe
-    df = db_add_managers_to_df(df)
-
-    # Make sure the dataframe is sorted by date
-    df = df.sort_values(by="utc_date").reset_index(drop=True)
-
-    # Add league table position to the dataframe
-    df = get_league_table_position(df)
-
-    return df
+    # Add other columns to the dataframe
+    return process_data_by_df(df)
 
 
 def db_get_data_by_year(year: int) -> pd.DataFrame:
@@ -268,8 +280,16 @@ def db_get_data_by_year(year: int) -> pd.DataFrame:
             f"SELECT * FROM football_data_season_results WHERE season = {year}", conn
         )
 
+    # Add other columns to the dataframe
+    return process_data_by_df(df)
+
+
+def process_data_by_df(df: pd.DataFrame) -> pd.DataFrame:
     # Add managers to the dataframe
     df = db_add_managers_to_df(df)
+
+    # Make sure the dataframe is sorted by date
+    df = df.sort_values(by="utc_date").reset_index(drop=True)
 
     # Add league table position to the dataframe
     df = get_league_table_position(df)
