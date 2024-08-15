@@ -5,3 +5,4 @@ results.numbers
 .vscode/settings.json
 data.db
 .dockerignore
+docker commands.txt
