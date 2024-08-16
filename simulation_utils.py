@@ -170,45 +170,6 @@ def db_add_managers_to_df(df: pd.DataFrame) -> pd.DataFrame:
         lambda x: find_manager(managers_df, x["away"], x["utc_date"]), axis=1
     )
 
-    # Add a column to indicate the index of manager change
-    df["home_manager_count"] = 0
-    df["away_manager_count"] = 0
-
-    # Get the unique managers for each team and find the index of the manager change
-    home_managers = (
-        df[["home", "home_manager", "utc_date"]]
-        .drop_duplicates()
-        .rename(columns={"home": "team", "home_manager": "manager"})
-    )
-    away_managers = (
-        df[["away", "away_manager", "utc_date"]]
-        .drop_duplicates()
-        .rename(columns={"away": "team", "away_manager": "manager"})
-    )
-    teams_to_managers = pd.concat([home_managers, away_managers]).drop_duplicates()
-
-    for team in teams_to_managers["team"].unique():
-        managers: pd.DataFrame = teams_to_managers[teams_to_managers["team"] == team][
-            ["manager", "utc_date"]
-        ]
-
-        # Sort by date
-        managers = managers.sort_values(by="utc_date")
-        managers = managers["manager"].unique()
-
-        # Skip if there is only one manager by dropping the first manager
-        managers = managers[1:]
-
-        for i, manager in enumerate(managers, 1):
-            df.loc[
-                (df["home"] == team) & (df["home_manager"] == manager),
-                "home_manager_count",
-            ] = i
-            df.loc[
-                (df["away"] == team) & (df["away_manager"] == manager),
-                "away_manager_count",
-            ] = i
-
     return df
 
 
@@ -263,6 +224,41 @@ def get_league_table_position(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_manager_tenure(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # Initialize the manager tenure columns
+    df["home_manager_tenure"] = 0
+    df["away_manager_tenure"] = 0
+
+    manager_df = df[["home_manager", "away_manager"]]
+    for i, row in manager_df.iterrows():
+        # Get the portion of the dataframe up to the date of the fixture
+        df_to_date = manager_df.loc[:i, :].copy()
+
+        # Count the number of times the home manager has appeared in the dataframe
+        home_manager_values = df_to_date["home_manager"].value_counts().to_dict()
+        away_manager_values = df_to_date["away_manager"].value_counts().to_dict()
+
+        # Get the tenure of the home manager
+        home_manager = row["home_manager"]
+        df.loc[i, "home_manager_tenure"] = home_manager_values.get(
+            home_manager, 0
+        ) + away_manager_values.get(home_manager, 0)
+
+        # Get the tenure of the away manager
+        away_manager = row["away_manager"]
+        df.loc[i, "away_manager_tenure"] = home_manager_values.get(
+            away_manager, 0
+        ) + away_manager_values.get(away_manager, 0)
+
+    # Set tenure columns to integers
+    df["home_manager_tenure"] = df["home_manager_tenure"].astype(int)
+    df["away_manager_tenure"] = df["away_manager_tenure"].astype(int)
+
+    return df
+
+
 def db_get_data_for_latest_season() -> pd.DataFrame:
     with SlowDB.connect(S3_BUCKET, S3_INFERENCE_DATA_DB_KEY, readonly=True) as conn:
         df = pd.read_sql(
@@ -290,6 +286,9 @@ def process_data_by_df(df: pd.DataFrame) -> pd.DataFrame:
 
     # Make sure the dataframe is sorted by date
     df = df.sort_values(by="utc_date").reset_index(drop=True)
+
+    # Add manager tenure to the dataframe
+    df = add_manager_tenure(df)
 
     # Add league table position to the dataframe
     df = get_league_table_position(df)
