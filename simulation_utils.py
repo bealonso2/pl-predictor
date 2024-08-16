@@ -1,10 +1,11 @@
-from dataclasses import dataclass
 import difflib
 import functools
 import json
 import re
 import uuid
 import warnings
+from collections import deque
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -23,6 +24,9 @@ S3_INFERENCE_RESULTS_DB_KEY = "2024/results.db"
 S3_MODEL_KEY = "2024/random_forest.joblib"
 S3_SCALER_KEY = "2024/standard_scaler.joblib"
 S3_PARAMS_KEY = "2024/best_params.json"
+
+# Number of matches to consider for form
+FORM_MATCHES = 5
 
 
 class DecayMethod(Enum):
@@ -259,6 +263,55 @@ def add_manager_tenure(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_form(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # Initialize the form columns
+    df["home_form"] = 0
+    df["away_form"] = 0
+
+    for i, row in df.iterrows():
+        # Get the portion of the dataframe up to the date of the fixture
+        portion = df.loc[:i, :]
+
+        # Get the total outcome of the home and away teams
+        all_home_results: pd.DataFrame = portion[
+            (portion["home"] == row["home"]) | (portion["away"] == row["home"])
+        ]
+        all_home_results = all_home_results[all_home_results.index != i]
+        home_results = all_home_results.tail(FORM_MATCHES)
+
+        if home_results.empty:
+            home_form = 0
+
+        # Keep only the results of the home team
+        home_form = (
+            home_results[home_results["home"] == row["home"]]["home_outcome"].sum()
+            + home_results[home_results["away"] == row["home"]]["away_outcome"].sum()
+        )
+
+        all_away_results: pd.DataFrame = portion[
+            (portion["home"] == row["away"]) | (portion["away"] == row["away"])
+        ]
+        all_away_results = all_away_results[all_away_results.index != i]
+        away_results = all_away_results.tail(FORM_MATCHES)
+
+        if away_results.empty:
+            away_form = 0
+
+        # Keep only the results of the away team
+        away_form = (
+            away_results[away_results["home"] == row["away"]]["home_outcome"].sum()
+            + away_results[away_results["away"] == row["away"]]["away_outcome"].sum()
+        )
+
+        # Add the form to the dataframe
+        df.loc[i, "home_form"] = home_form
+        df.loc[i, "away_form"] = away_form
+
+    return df
+
+
 def db_get_data_for_latest_season() -> pd.DataFrame:
     with SlowDB.connect(S3_BUCKET, S3_INFERENCE_DATA_DB_KEY, readonly=True) as conn:
         df = pd.read_sql(
@@ -289,6 +342,9 @@ def process_data_by_df(df: pd.DataFrame) -> pd.DataFrame:
 
     # Add manager tenure to the dataframe
     df = add_manager_tenure(df)
+
+    # Add form to the dataframe
+    df = add_form(df)
 
     # Add league table position to the dataframe
     df = get_league_table_position(df)
@@ -596,12 +652,29 @@ def simulate_match(
     away_elo: float,
     home_position: int,
     away_position: int,
+    home_manager_tenure: int,
+    away_manager_tenure: int,
+    home_form: int,
+    away_form: int,
     model: RandomForestClassifier,
     scaler: StandardScaler,
 ):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        x = scaler.transform([[home_elo, away_elo, home_position, away_position]])
+        x = scaler.transform(
+            [
+                [
+                    home_elo,
+                    away_elo,
+                    home_position,
+                    away_position,
+                    home_manager_tenure,
+                    away_manager_tenure,
+                    home_form,
+                    away_form,
+                ]
+            ]
+        )
     probabilities = model.predict_proba(x)
     return np.random.choice([0, 1, 3], p=probabilities[0])
 
@@ -640,6 +713,10 @@ def simulate_season(
     # Initialize a dictionary to store points for each team
     team_to_points = {team: 0 for team in df["home"].unique()}
 
+    # Initialize a dictionary to store the form of each team
+    # No need to update the dictionary as deque is mutable and will update in place
+    team_to_form = {team: deque(maxlen=FORM_MATCHES) for team in df["home"].unique()}
+
     # Can run matches in a match week concurrently in the future
     for index, row in df.iterrows():
         # Get the unique values of team_to_points and sort them in descending order
@@ -657,6 +734,14 @@ def simulate_season(
         # Add home and away positions to the dataframe
         df.loc[index, "home_position"] = home_position
         df.loc[index, "away_position"] = away_position
+
+        # Get current form of each team
+        home_form = team_to_form[row["home"]]
+        away_form = team_to_form[row["away"]]
+
+        # Add form to the dataframe
+        df.loc[index, "home_form"] = sum(home_form)
+        df.loc[index, "away_form"] = sum(away_form)
 
         # Get the home and away teams
         home_team, away_team = row["home"], row["away"]
@@ -682,7 +767,16 @@ def simulate_season(
         else:
             # Simulate match and update ELO ratings
             outcome = simulate_match(
-                home_elo, away_elo, home_position, away_position, model, scaler
+                home_elo,
+                away_elo,
+                home_position,
+                away_position,
+                row["home_manager_tenure"],
+                row["away_manager_tenure"],
+                row["home_form"],
+                row["away_form"],
+                model,
+                scaler,
             )
 
             match outcome:
@@ -716,6 +810,10 @@ def simulate_season(
         # Update points for each team
         team_to_points[home_team] += home_outcome
         team_to_points[away_team] += away_outcome
+
+        # Add points to the form of each team
+        home_form.append(home_outcome)
+        away_form.append(away_outcome)
 
     return df
 
@@ -797,7 +895,7 @@ def upload_to_s3(
     response = s3.put_object(Bucket=bucket, Key=key, Body=data)
 
     if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
-        print(f"{name.title()} uploaded to s3://{S3_BUCKET}/{S3_MODEL_KEY}")
+        print(f"{name.title()} uploaded to s3://{S3_BUCKET}/{key}")
         if should_delete:
             Path(file).unlink()
     else:
