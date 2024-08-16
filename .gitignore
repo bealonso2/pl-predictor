@@ -1,1 +1,8 @@
 results.numbers
+*.env
+*__pycache__/
+.vscode/launch.json
+.vscode/settings.json
+data.db
+.dockerignore
+docker commands.txt

@@ -1,34 +1,39 @@
 # pl-predictor
 
+## Note
+
+Moving to [my website](https://balonso.com). This will be the new home for all my predictions.
+
 ## About
+
 [pl-predictor](https://github.com/bealonso2/pl-predictor) is an ongoing project to try and predict the outcome of the Premier League more accurately than my friends.
 
 I started in 2020 to try and improve my python skills and learn more about data science. While my python skills have improved, I have a long way to go with predicting the results of the Premier League.
 
 ## 2023-2024 Predictions 🔮
 
-|   Position | Team                     |
-|-----------:|:-------------------------|
-|          1 | Manchester City          |
-|          2 | Arsenal                  |
-|          3 | Manchester United        |
-|          4 | Liverpool                |
-|          5 | Newcastle United         |
-|          6 | West Ham                 |
-|          7 | Chelsea                  |
-|          8 | Tottenham Hotspur        |
-|          9 | Brighton and Hove Albion |
-|         10 | Brentford                |
-|         11 | Fulham                   |
-|         12 | Burnley                  |
-|         13 | Aston Villa              |
-|         14 | Crystal Palace           |
-|         15 | Wolverhampton Wanderers  |
-|         16 | Everton                  |
-|         17 | Nottingham Forest        |
-|         18 | Luton                    |
-|         19 | Sheffield United         |
-|         20 | Bournemouth              |
+| Position | Team                     |
+| -------: | :----------------------- |
+|        1 | Manchester City          |
+|        2 | Arsenal                  |
+|        3 | Manchester United        |
+|        4 | Liverpool                |
+|        5 | Newcastle United         |
+|        6 | West Ham                 |
+|        7 | Chelsea                  |
+|        8 | Tottenham Hotspur        |
+|        9 | Brighton and Hove Albion |
+|       10 | Brentford                |
+|       11 | Fulham                   |
+|       12 | Burnley                  |
+|       13 | Aston Villa              |
+|       14 | Crystal Palace           |
+|       15 | Wolverhampton Wanderers  |
+|       16 | Everton                  |
+|       17 | Nottingham Forest        |
+|       18 | Luton                    |
+|       19 | Sheffield United         |
+|       20 | Bournemouth              |
 
 ### Other predictions
 
