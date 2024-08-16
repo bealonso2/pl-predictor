@@ -553,6 +553,9 @@ def build_elo_between_seasons(
     # Divide Elo by 2
     elo = {team: elo[team] / 2 for team in elo}
 
+    # Scale the Elo back towards 1500 by 33%
+    elo = {team: 0.5 * elo[team] + 0.5 * 1500 for team in elo}
+
     # Gets Elo based on current club value
     elo_df = build_elo_df_from_dict(elo, club_value_adjustment_factor)
 
