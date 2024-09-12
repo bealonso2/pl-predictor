@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r inference_requirements.txt
 EXPOSE 80
 
 # Define environment variable
-# ENV NAME World
+ENV S3_PREFIX 2024
 
 # Run inference.py when the container launches
 CMD ["python", "inference.py"]

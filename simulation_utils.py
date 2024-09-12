@@ -1,6 +1,7 @@
 import difflib
 import functools
 import json
+import os
 import re
 import uuid
 import warnings
@@ -19,11 +20,15 @@ from sklearn.preprocessing import StandardScaler
 import SlowDB
 
 S3_BUCKET = "pl-prediction"
-S3_INFERENCE_DATA_DB_KEY = "2024/data.db"
-S3_INFERENCE_RESULTS_DB_KEY = "2024/results.db"
-S3_MODEL_KEY = "2024/random_forest.joblib"
-S3_SCALER_KEY = "2024/standard_scaler.joblib"
-S3_PARAMS_KEY = "2024/best_params.json"
+TEST_PREFIX = "2024_test"
+
+S3_PREFIX = os.getenv("S3_PREFIX", TEST_PREFIX)
+
+S3_INFERENCE_DATA_DB_KEY = f"{S3_PREFIX}/data.db"
+S3_INFERENCE_RESULTS_DB_KEY = f"{S3_PREFIX}/results.db"
+S3_MODEL_KEY = f"{S3_PREFIX}/random_forest.joblib"
+S3_SCALER_KEY = f"{S3_PREFIX}/standard_scaler.joblib"
+S3_PARAMS_KEY = f"{S3_PREFIX}/best_params.json"
 
 # Number of matches to consider for form
 FORM_MATCHES = 5
