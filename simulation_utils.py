@@ -777,9 +777,6 @@ def get_starts_of_next_matchweeks(df: pd.DataFrame) -> list[pd.Timestamp]:
     # Return the entire list of dates
     return start_of_match_week_dates
 
-    # # Subtract 12 hours from the earliest date
-    # next_simulation = earliest_date - pd.DateOffset(hours=12)
-
 
 @dataclass
 class CurrentSeasonState:
@@ -916,17 +913,27 @@ def process_finished_matches(
 
 def get_upcoming_probabilities(
     current_season_state: CurrentSeasonState,
-    start_of_match_week: pd.Timestamp,
-    end_of_match_week: pd.Timestamp,
+    list_of_matchweeks: list[pd.Timestamp],
 ) -> pd.DataFrame:
     current_season_state = current_season_state.copy()
 
-    # Process matches between start_filter and end_filter
+    # Remove finished matches from the dataframe
     current_season_state_df = current_season_state.df
     df_upcoming = current_season_state_df[
-        (current_season_state_df["utc_date"] >= start_of_match_week)
-        & (current_season_state_df["utc_date"] < end_of_match_week)
+        current_season_state_df["status"] != "FINISHED"
     ].copy()
+
+    for matchweek in list_of_matchweeks:
+        df_temp = current_season_state_df[
+            (current_season_state_df["utc_date"] >= pd.Timestamp.now())
+            & (current_season_state_df["utc_date"] < matchweek)
+        ].copy()
+
+        if not df_temp.empty:
+            df_upcoming = df_temp.copy()
+            break
+    else:
+        return df_upcoming
 
     # Get home and away elo
     home_elo_dict = current_season_state.home_elo
@@ -1247,22 +1254,23 @@ def db_store_results(
         average_results_df.to_sql("average_results", con=conn, if_exists="append")
 
         # Keep only the columns needed for the upcoming results
-        upcoming_results_df = upcoming_results_df[
-            [
-                "home",
-                "away",
-                "utc_date",
-                "home_win_probability",
-                "draw_probability",
-                "away_win_probability",
-            ]
-        ].copy()
+        if not upcoming_results_df.empty:
+            upcoming_results_df = upcoming_results_df[
+                [
+                    "home",
+                    "away",
+                    "utc_date",
+                    "home_win_probability",
+                    "draw_probability",
+                    "away_win_probability",
+                ]
+            ].copy()
 
-        # Add the uuid to the dataframe
-        upcoming_results_df["simulation_uuid"] = simulation_uuid
+            # Add the uuid to the dataframe
+            upcoming_results_df["simulation_uuid"] = simulation_uuid
 
-        # Save the dataframe to the database
-        upcoming_results_df.to_sql("upcoming_results", con=conn, if_exists="append")
+            # Save the dataframe to the database
+            upcoming_results_df.to_sql("upcoming_results", con=conn, if_exists="append")
 
         # Add the uuid to the dataframe and save it to the database
         team_to_points_df["simulation_uuid"] = simulation_uuid

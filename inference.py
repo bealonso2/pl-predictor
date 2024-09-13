@@ -80,12 +80,9 @@ def main():
     # Get the starts of matchweeks
     matchweek_starts = get_starts_of_next_matchweeks(df)
 
-    # Initialize filters with current timestamp and a week ahead
-    start_filter = matchweek_starts[0] if matchweek_starts else pd.Timestamp.now()
-    end_filter = (
-        matchweek_starts[1]
-        if len(matchweek_starts) > 1
-        else pd.Timestamp.now() + pd.Timedelta(days=7)
+    # Get the next day a job should run
+    next_job = (
+        matchweek_starts[0] - pd.DateOffset(hours=12) if matchweek_starts else None
     )
 
     # Build the elo dataframe before the current season
@@ -122,9 +119,7 @@ def main():
     current_season_state = current_season_state.copy()
 
     # Get updated matchweek predictions
-    df_upcoming = get_upcoming_probabilities(
-        current_season_state, start_filter, end_filter
-    )
+    df_upcoming = get_upcoming_probabilities(current_season_state, matchweek_starts)
 
     # Create a partial function to pass the same arguments to each simulation
     simulate_and_get_results_partial = partial(
