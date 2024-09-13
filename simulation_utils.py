@@ -656,7 +656,7 @@ def apply_decay_factor(elo: float, half_life: int, decay_method: DecayMethod) ->
             return elo * decay_factor + min(1500, elo) * (1 - decay_factor)
 
 
-def simulate_match(
+def get_match_probabilities(
     home_elo: float,
     away_elo: float,
     home_position: int,
@@ -667,7 +667,7 @@ def simulate_match(
     away_form: int,
     model: RandomForestClassifier,
     scaler: StandardScaler,
-):
+) -> np.ndarray:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         x = scaler.transform(
@@ -685,7 +685,34 @@ def simulate_match(
             ]
         )
     probabilities = model.predict_proba(x)
-    return np.random.choice([0, 1, 3], p=probabilities[0])
+    return probabilities[0]
+
+
+def simulate_match(
+    home_elo: float,
+    away_elo: float,
+    home_position: int,
+    away_position: int,
+    home_manager_tenure: int,
+    away_manager_tenure: int,
+    home_form: int,
+    away_form: int,
+    model: RandomForestClassifier,
+    scaler: StandardScaler,
+) -> int:
+    probabilities = get_match_probabilities(
+        home_elo,
+        away_elo,
+        home_position,
+        away_position,
+        home_manager_tenure,
+        away_manager_tenure,
+        home_form,
+        away_form,
+        model,
+        scaler,
+    )
+    return np.random.choice([0, 1, 3], p=probabilities)
 
 
 def get_season_results(df: pd.DataFrame) -> pd.DataFrame:
@@ -885,6 +912,95 @@ def process_finished_matches(
         half_life=half_life,
         decay_method=decay_method,
     )
+
+
+def get_upcoming_probabilities(
+    current_season_state: CurrentSeasonState,
+    start_of_match_week: pd.Timestamp,
+    end_of_match_week: pd.Timestamp,
+) -> pd.DataFrame:
+    current_season_state = current_season_state.copy()
+
+    # Process matches between start_filter and end_filter
+    current_season_state_df = current_season_state.df
+    df_upcoming = current_season_state_df[
+        (current_season_state_df["utc_date"] >= start_of_match_week)
+        & (current_season_state_df["utc_date"] < end_of_match_week)
+    ].copy()
+
+    # Get home and away elo
+    home_elo_dict = current_season_state.home_elo
+    away_elo_dict = current_season_state.away_elo
+
+    # Get the dictionary to store points for each team
+    team_to_points = current_season_state.team_to_points
+
+    # Get the dictionary to store the form of each team
+    team_to_form = current_season_state.team_to_form
+
+    # Get simulation parameters
+    model = current_season_state.model
+    scaler = current_season_state.scaler
+
+    # Initialize the columns to store the probabilities
+    df_upcoming["home_win_probability"] = pd.NA
+    df_upcoming["draw_probability"] = pd.NA
+    df_upcoming["away_win_probability"] = pd.NA
+
+    # For each fixture
+    for index, row in df_upcoming.iterrows():
+        # Get the unique values of team_to_points and sort them in descending order
+        team_to_points_ranks = list(set(team_to_points.values()))
+        team_to_points_values = sorted(team_to_points_ranks, reverse=True)
+
+        # Get the points for the home and away teams
+        home_points = team_to_points[row["home"]]
+        away_points = team_to_points[row["away"]]
+
+        # Update home and away league table positions based on index of team in team_to_points
+        home_position = team_to_points_values.index(home_points) + 1
+        away_position = team_to_points_values.index(away_points) + 1
+
+        # Add home and away positions to the dataframe
+        df_upcoming.loc[index, "home_position"] = home_position
+        df_upcoming.loc[index, "away_position"] = away_position
+
+        # Get current form of each team
+        home_form = team_to_form[row["home"]]
+        away_form = team_to_form[row["away"]]
+
+        # Add form to the dataframe
+        df_upcoming.loc[index, "home_form"] = sum(home_form)
+        df_upcoming.loc[index, "away_form"] = sum(away_form)
+
+        # Get the home and away teams
+        home_team, away_team = row["home"], row["away"]
+
+        # Get current Elo ratings
+        home_elo = home_elo_dict[home_team]
+        away_elo = away_elo_dict[away_team]
+
+        # Simulate match and update ELO ratings
+        probabilities = get_match_probabilities(
+            home_elo,
+            away_elo,
+            home_position,
+            away_position,
+            row["home_manager_tenure"],
+            row["away_manager_tenure"],
+            row["home_form"],
+            row["away_form"],
+            model,
+            scaler,
+        )
+
+        # Update the dataframe with the probabilities
+        p_away_win, p_draw, p_home_win = probabilities
+        df_upcoming.at[index, "home_win_probability"] = p_home_win
+        df_upcoming.at[index, "draw_probability"] = p_draw
+        df_upcoming.at[index, "away_win_probability"] = p_away_win
+
+    return df_upcoming
 
 
 def simulate_season(
@@ -1092,6 +1208,7 @@ def download_model_and_scaler_from_s3(model_file: Path, scaler_file: Path) -> No
 def db_store_results(
     season: str,
     average_results_df: pd.DataFrame,
+    upcoming_results_df: pd.DataFrame,
     team_positions_df: pd.DataFrame,
     team_to_points_df: pd.DataFrame,
 ) -> None:
@@ -1128,6 +1245,24 @@ def db_store_results(
 
         # Save the dataframe to the database
         average_results_df.to_sql("average_results", con=conn, if_exists="append")
+
+        # Keep only the columns needed for the upcoming results
+        upcoming_results_df = upcoming_results_df[
+            [
+                "home",
+                "away",
+                "utc_date",
+                "home_win_probability",
+                "draw_probability",
+                "away_win_probability",
+            ]
+        ].copy()
+
+        # Add the uuid to the dataframe
+        upcoming_results_df["simulation_uuid"] = simulation_uuid
+
+        # Save the dataframe to the database
+        upcoming_results_df.to_sql("upcoming_results", con=conn, if_exists="append")
 
         # Add the uuid to the dataframe and save it to the database
         team_to_points_df["simulation_uuid"] = simulation_uuid

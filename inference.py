@@ -20,6 +20,7 @@ from simulation_utils import (
     download_model_and_scaler_from_s3,
     get_elo_dict_from_df,
     get_starts_of_next_matchweeks,
+    get_upcoming_probabilities,
     process_finished_matches,
     simulate_and_get_results,
 )
@@ -105,6 +106,12 @@ def main():
         best_params.k,
         best_params.half_life,
         best_params.decay_method,
+    )
+    current_season_state = current_season_state.copy()
+
+    # Get updated matchweek predictions
+    df_upcoming = get_upcoming_probabilities(
+        current_season_state, start_filter, end_filter
     )
 
     # Create a partial function to pass the same arguments to each simulation
@@ -232,7 +239,11 @@ def main():
 
     # Store the results in the database
     db_store_results(
-        simulation_season, average_results, team_positions_df, team_to_points
+        simulation_season,
+        average_results,
+        df_upcoming,
+        team_positions_df,
+        team_to_points,
     )
 
 
