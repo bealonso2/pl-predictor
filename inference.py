@@ -5,6 +5,7 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
+import requests
 from tqdm import tqdm
 
 from db_builder import (
@@ -47,6 +48,14 @@ def main():
         action="store_true",
         help="Update club values in the database",
     )
+    # Add an optional argument to rebuild the website
+    parser.add_argument(
+        "-d",
+        "--deployment_hook",
+        type=str,
+        default="",
+        help="Deployment hook for the website",
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -56,6 +65,9 @@ def main():
 
     # Update club values in the database
     update_club_values = args.update_club_values
+
+    # Deployment hook for the website
+    deployment_hook = args.deployment_hook
 
     # Build the data for the latest season
     update_results_and_club_values(SEASONS, update_club_values)
@@ -245,6 +257,10 @@ def main():
         team_positions_df,
         team_to_points,
     )
+
+    # If a deployment hook is provided, call it
+    if deployment_hook:
+        requests.post(deployment_hook)
 
 
 if __name__ == "__main__":
