@@ -1,3 +1,4 @@
+import copy
 import difflib
 import functools
 import json
@@ -703,7 +704,85 @@ def get_season_results(df: pd.DataFrame) -> pd.DataFrame:
     return results
 
 
-def simulate_season(
+def get_starts_of_next_matchweeks(df: pd.DataFrame) -> list[pd.Timestamp]:
+    """Get the next two matchweeks from the dataframe."""
+    # Make a copy of the dataframe
+    df_next_sim = df.copy()
+
+    # Filter out all utc_date that are in the past and matches that do not have a status of 'TIMED'
+    df_next_sim = df_next_sim[
+        (df_next_sim["utc_date"] > pd.Timestamp.now())
+        & (df_next_sim["status"] == "TIMED")
+    ]
+
+    # Convert all utc_date to the local date, drop the time component
+    df_next_sim["local_date"] = df_next_sim["utc_date"].dt.floor("D")
+
+    # Get the unique local dates
+    unique_local_dates = df_next_sim["local_date"].unique()
+
+    # Starting from the back of the list, remove future dates that don't have a match
+    # one day in front of it. But if the date is standalone, keep it.
+    start_of_match_week_dates = []
+
+    for i in range(len(unique_local_dates) - 1, -1, -1):
+        if unique_local_dates[i] in start_of_match_week_dates:
+            continue
+
+        # Check to see if the date has a match one day in front of it
+        if unique_local_dates[i] - pd.DateOffset(1) not in unique_local_dates:
+            start_of_match_week_dates.append(unique_local_dates[i])
+
+    # Make sure tomorrow is not in the list, because we are running the simulation for tomorrow
+    start_of_match_week_dates = [
+        date
+        for date in start_of_match_week_dates
+        if date != pd.Timestamp.now().floor("D") + pd.DateOffset(1)
+    ]
+
+    # Send an alert if there are no matches to simulate
+    if not start_of_match_week_dates:
+        print("No matches to simulate")
+
+    # Sort the dates in ascending order (earliest date first)
+    start_of_match_week_dates = sorted(start_of_match_week_dates)
+
+    # Return the entire list of dates
+    return start_of_match_week_dates
+
+    # # Subtract 12 hours from the earliest date
+    # next_simulation = earliest_date - pd.DateOffset(hours=12)
+
+
+@dataclass
+class CurrentSeasonState:
+    df: pd.DataFrame
+    home_elo: dict[str, float]
+    away_elo: dict[str, float]
+    team_to_points: dict[str, int]
+    team_to_form: dict[str, deque[int]]
+    model: RandomForestClassifier
+    scaler: StandardScaler
+    k: int
+    half_life: int
+    decay_method: DecayMethod
+
+    def copy(self) -> "CurrentSeasonState":
+        return CurrentSeasonState(
+            df=self.df.copy(),
+            home_elo=self.home_elo.copy(),
+            away_elo=self.away_elo.copy(),
+            team_to_points=self.team_to_points.copy(),
+            team_to_form=copy.deepcopy(self.team_to_form),
+            model=copy.deepcopy(self.model),
+            scaler=copy.deepcopy(self.scaler),
+            k=self.k,
+            half_life=self.half_life,
+            decay_method=self.decay_method,
+        )
+
+
+def process_finished_matches(
     df: pd.DataFrame,
     elo: dict[str, float],
     model: RandomForestClassifier,
@@ -711,7 +790,7 @@ def simulate_season(
     k: int,
     half_life: int,
     decay_method: DecayMethod,
-) -> pd.DataFrame:
+) -> CurrentSeasonState:
     df = df.copy()
 
     # Get home and away elo
@@ -725,8 +804,8 @@ def simulate_season(
     # No need to update the dictionary as deque is mutable and will update in place
     team_to_form = {team: deque(maxlen=FORM_MATCHES) for team in df["home"].unique()}
 
-    # Can run matches in a match week concurrently in the future
-    for index, row in df.iterrows():
+    # Process matches and update ELO ratings that have been played
+    for index, row in df[df["status"] == "FINISHED"].iterrows():
         # Get the unique values of team_to_points and sort them in descending order
         team_to_points_ranks = list(set(team_to_points.values()))
         team_to_points_values = sorted(team_to_points_ranks, reverse=True)
@@ -758,48 +837,142 @@ def simulate_season(
         home_elo = home_elo_dict[home_team]
         away_elo = away_elo_dict[away_team]
 
-        # Based on status, update the outcome
-        if row["status"] == "FINISHED":
-            if row["home_score"] > row["away_score"]:
+        # Process finished results
+        if row["home_score"] > row["away_score"]:
+            home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
+            home_outcome = 3
+            away_outcome = 0
+        elif row["away_score"] > row["home_score"]:
+            away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
+            home_outcome = 0
+            away_outcome = 3
+        else:
+            home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
+            home_outcome = 1
+            away_outcome = 1
+
+        # Update the dataframe with the real or simulated results
+        df.at[index, "home_elo"] = home_elo
+        df.at[index, "away_elo"] = away_elo
+        df.at[index, "home_outcome"] = home_outcome
+        df.at[index, "away_outcome"] = away_outcome
+
+        # Time-decay Elo ratings
+        home_elo = apply_decay_factor(home_elo, half_life, decay_method)
+        away_elo = apply_decay_factor(away_elo, half_life, decay_method)
+
+        # Update Elo ratings in the dictionary
+        home_elo_dict[home_team] = home_elo
+        away_elo_dict[away_team] = away_elo
+
+        # Update points for each team
+        team_to_points[home_team] += home_outcome
+        team_to_points[away_team] += away_outcome
+
+        # Add points to the form of each team
+        home_form.append(home_outcome)
+        away_form.append(away_outcome)
+
+    return CurrentSeasonState(
+        df=df,
+        home_elo=home_elo_dict,
+        away_elo=away_elo_dict,
+        team_to_points=team_to_points,
+        team_to_form=team_to_form,
+        model=model,
+        scaler=scaler,
+        k=k,
+        half_life=half_life,
+        decay_method=decay_method,
+    )
+
+
+def simulate_season(
+    current_season_state: CurrentSeasonState,
+) -> pd.DataFrame:
+    # Copy the current season state to ensure immutability
+    current_season_state = current_season_state.copy()
+
+    # Get the dataframe
+    df = current_season_state.df
+
+    # Get home and away elo
+    home_elo_dict = current_season_state.home_elo
+    away_elo_dict = current_season_state.away_elo
+
+    # Get the dictionary to store points for each team
+    team_to_points = current_season_state.team_to_points
+
+    # Get the dictionary to store the form of each team
+    team_to_form = current_season_state.team_to_form
+
+    # Get simulation parameters
+    model = current_season_state.model
+    scaler = current_season_state.scaler
+    k = current_season_state.k
+    half_life = current_season_state.half_life
+    decay_method = current_season_state.decay_method
+
+    # Process matches and update ELO ratings that have NOT been played
+    for index, row in df[df["status"] != "FINISHED"].iterrows():
+        # Get the unique values of team_to_points and sort them in descending order
+        team_to_points_ranks = list(set(team_to_points.values()))
+        team_to_points_values = sorted(team_to_points_ranks, reverse=True)
+
+        # Get the points for the home and away teams
+        home_points = team_to_points[row["home"]]
+        away_points = team_to_points[row["away"]]
+
+        # Update home and away league table positions based on index of team in team_to_points
+        home_position = team_to_points_values.index(home_points) + 1
+        away_position = team_to_points_values.index(away_points) + 1
+
+        # Add home and away positions to the dataframe
+        df.loc[index, "home_position"] = home_position
+        df.loc[index, "away_position"] = away_position
+
+        # Get current form of each team
+        home_form = team_to_form[row["home"]]
+        away_form = team_to_form[row["away"]]
+
+        # Add form to the dataframe
+        df.loc[index, "home_form"] = sum(home_form)
+        df.loc[index, "away_form"] = sum(away_form)
+
+        # Get the home and away teams
+        home_team, away_team = row["home"], row["away"]
+
+        # Get current Elo ratings
+        home_elo = home_elo_dict[home_team]
+        away_elo = away_elo_dict[away_team]
+
+        # Simulate match and update ELO ratings
+        outcome = simulate_match(
+            home_elo,
+            away_elo,
+            home_position,
+            away_position,
+            row["home_manager_tenure"],
+            row["away_manager_tenure"],
+            row["home_form"],
+            row["away_form"],
+            model,
+            scaler,
+        )
+
+        match outcome:
+            case 3:  # Home team won
                 home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
                 home_outcome = 3
                 away_outcome = 0
-            elif row["away_score"] > row["home_score"]:
+            case 0:  # Away team won
                 away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
                 home_outcome = 0
                 away_outcome = 3
-            else:
+            case 1:  # Draw
                 home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
                 home_outcome = 1
                 away_outcome = 1
-        else:
-            # Simulate match and update ELO ratings
-            outcome = simulate_match(
-                home_elo,
-                away_elo,
-                home_position,
-                away_position,
-                row["home_manager_tenure"],
-                row["away_manager_tenure"],
-                row["home_form"],
-                row["away_form"],
-                model,
-                scaler,
-            )
-
-            match outcome:
-                case 3:  # Home team won
-                    home_elo, away_elo = update_elo_win(home_elo, away_elo, k)
-                    home_outcome = 3
-                    away_outcome = 0
-                case 0:  # Away team won
-                    away_elo, home_elo = update_elo_win(away_elo, home_elo, k)
-                    home_outcome = 0
-                    away_outcome = 3
-                case 1:  # Draw
-                    home_elo, away_elo = update_elo_draw(home_elo, away_elo, k)
-                    home_outcome = 1
-                    away_outcome = 1
 
         # Update the dataframe with the real or simulated results
         df.at[index, "home_elo"] = home_elo
@@ -829,15 +1002,9 @@ def simulate_season(
 # Define a function to simulate a season and get results
 def simulate_and_get_results(
     i: int,
-    df: pd.DataFrame,
-    elo: dict[str, float],
-    model: RandomForestClassifier,
-    scaler: StandardScaler,
-    k: int,
-    half_life: int,
-    decay_method: DecayMethod,
+    current_season_state: CurrentSeasonState,
 ) -> pd.DataFrame:
-    simulated_df = simulate_season(df, elo, model, scaler, k, half_life, decay_method)
+    simulated_df = simulate_season(current_season_state)
     results = get_season_results(simulated_df)
     results["season"] = i
     return results

@@ -19,6 +19,8 @@ from simulation_utils import (
     download_best_params_from_s3,
     download_model_and_scaler_from_s3,
     get_elo_dict_from_df,
+    get_starts_of_next_matchweeks,
+    process_finished_matches,
     simulate_and_get_results,
 )
 
@@ -62,13 +64,25 @@ def main():
     # Get data for the latest season
     df = db_get_data_for_latest_season()
 
+    # Get the starts of matchweeks
+    matchweek_starts = get_starts_of_next_matchweeks(df)
+
+    # Initialize filters with current timestamp and a week ahead
+    start_filter = matchweek_starts[0] if matchweek_starts else pd.Timestamp.now()
+    end_filter = (
+        matchweek_starts[1]
+        if len(matchweek_starts) > 1
+        else pd.Timestamp.now() + pd.Timedelta(days=7)
+    )
+
     # Build the elo dataframe before the current season
     elo_df, team_to_points = build_elo_before_season(df)
 
     # Get the model and scalar from S3
     model_file = Path("random_forest.joblib")
     scaler_file = Path("standard_scaler.joblib")
-    download_model_and_scaler_from_s3(model_file, scaler_file)
+    if not model_file.exists() or not scaler_file.exists():
+        download_model_and_scaler_from_s3(model_file, scaler_file)
     model = joblib.load(model_file)
     scaler = joblib.load(scaler_file)
 
@@ -81,19 +95,26 @@ def main():
     # Get the best parameters for the model
     best_params = download_best_params_from_s3()
 
+    # Process the matches up to the current matchweek (so each simulation doesn't have to do this)
+    print("Processing finished matches")
+    current_season_state = process_finished_matches(
+        df,
+        adjusted_elo,
+        model,
+        scaler,
+        best_params.k,
+        best_params.half_life,
+        best_params.decay_method,
+    )
+
     # Create a partial function to pass the same arguments to each simulation
     simulate_and_get_results_partial = partial(
         simulate_and_get_results,
-        df=df,
-        elo=adjusted_elo,
-        model=model,
-        scaler=scaler,
-        k=best_params.k,
-        half_life=best_params.half_life,
-        decay_method=best_params.decay_method,
+        current_season_state=current_season_state,
     )
 
     # Initialize a pool of workers
+    print(f"Simulating {num_simulations} seasons")
     with ProcessPoolExecutor() as executor:
         seasons = list(
             tqdm(
