@@ -923,11 +923,17 @@ def get_upcoming_probabilities(
         current_season_state_df["status"] != "FINISHED"
     ].copy()
 
+    # Skip evaluation of the first matchweek, no matches should be between now and then
+    # TODO verify this works
+    if len(list_of_matchweeks) <= 1:
+        return df_upcoming
+    list_of_matchweeks = list_of_matchweeks[1:]
+
+    # Filter once for utc_date >= now
+    df_upcoming = df_upcoming[df_upcoming["utc_date"] >= pd.Timestamp.now()]
+
     for matchweek in list_of_matchweeks:
-        df_temp = current_season_state_df[
-            (current_season_state_df["utc_date"] >= pd.Timestamp.now())
-            & (current_season_state_df["utc_date"] < matchweek)
-        ].copy()
+        df_temp = df_upcoming[(df_upcoming["utc_date"] < matchweek)]
 
         if not df_temp.empty:
             df_upcoming = df_temp.copy()
