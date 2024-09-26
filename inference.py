@@ -83,9 +83,13 @@ def main():
     matchweek_starts = get_starts_of_next_matchweeks(df)
 
     # Get the next day a job should run
-    next_job = (
-        matchweek_starts[0] - pd.DateOffset(hours=12) if matchweek_starts else None
-    )
+    next_job = None
+    for matchweek_start in matchweek_starts:
+        # Skip the matchweek considered for next job if it has already started or starts in less than 2 days
+        if matchweek_start < pd.Timestamp.now() + pd.Timedelta(days=2):
+            continue
+        next_job = matchweek_start - pd.DateOffset(hours=23)
+        break
 
     # Build the elo dataframe before the current season
     elo_df, team_to_points = build_elo_before_season(df)
