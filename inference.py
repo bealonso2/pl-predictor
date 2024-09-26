@@ -19,10 +19,12 @@ from simulation_utils import (
     db_store_results,
     download_best_params_from_s3,
     download_model_and_scaler_from_s3,
+    download_simulation_config_from_s3,
     get_elo_dict_from_df,
     get_starts_of_next_matchweeks,
     get_upcoming_probabilities,
     process_finished_matches,
+    schedule_next_simulation,
     simulate_and_get_results,
 )
 
@@ -253,9 +255,19 @@ def main():
         team_to_points,
     )
 
+    # Get the simulations configuration from s3
+    # TODO use toml in the future
+    simulation_config = download_simulation_config_from_s3()
+
     # If a deployment hook is provided, call it
-    if deployment_hook:
+    if simulation_config.deployment_hook:
+        print(f"Calling deployment hook {simulation_config.deployment_hook}")
         requests.post(deployment_hook)
+
+    # Schedule the next job on ECS
+    if next_job:
+        print(f"Scheduling next job for {next_job}")
+        schedule_next_simulation(next_job, simulation_config.commands)
 
 
 if __name__ == "__main__":
