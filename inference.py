@@ -50,14 +50,6 @@ def main():
         action="store_true",
         help="Update club values in the database",
     )
-    # Add an optional argument to rebuild the website
-    parser.add_argument(
-        "-d",
-        "--deployment_hook",
-        type=str,
-        default="",
-        help="Deployment hook for the website",
-    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -67,9 +59,6 @@ def main():
 
     # Update club values in the database
     update_club_values = args.update_club_values
-
-    # Deployment hook for the website
-    deployment_hook = args.deployment_hook
 
     # Build the data for the latest season
     update_results_and_club_values(SEASONS, update_club_values)
@@ -264,8 +253,9 @@ def main():
     simulation_config = download_simulation_config_from_s3()
 
     # If a deployment hook is provided, call it
-    if simulation_config.deployment_hook:
-        print(f"Calling deployment hook {simulation_config.deployment_hook}")
+    deployment_hook = simulation_config.deployment_hook
+    if deployment_hook:
+        print(f"Calling deployment hook {deployment_hook}")
         requests.post(deployment_hook)
 
     # Schedule the next job on ECS
