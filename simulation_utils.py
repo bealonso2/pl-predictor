@@ -1249,7 +1249,7 @@ def schedule_next_simulation(
             {
                 "containerOverrides": [
                     {
-                        "name": "pl-test",
+                        "name": "pl-inference",
                         "command": commands,
                         "environment": [
                             {"name": "S3_PREFIX", "value": S3_PREFIX},
