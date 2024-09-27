@@ -927,7 +927,6 @@ def get_upcoming_probabilities(
     # TODO verify this works
     if len(list_of_matchweeks) <= 1:
         return df_upcoming
-    list_of_matchweeks = list_of_matchweeks[1:]
 
     # Filter once for utc_date >= now
     df_upcoming = df_upcoming[df_upcoming["utc_date"] >= pd.Timestamp.now()]
