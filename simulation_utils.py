@@ -1206,63 +1206,25 @@ def schedule_next_simulation(
     time: pd.Timestamp,
     commands: list[str],
 ) -> None:
-    # Schedule the next simulation using EventBridge
-    eventbridge_client = boto3.client("events")
+    # Schedule the next simulation using a custom lambda function
+    lambda_client = boto3.client("lambda")
 
-    # Format the time into a cron expression or a rate expression
-    cron_expression = time.strftime("cron(%M %H %d %m ? %Y)")
-
-    # Create or update the EventBridge rule to trigger at the specified time
-    rule_name = "schedule-next-pl-inference-task-rule"
-    response = eventbridge_client.put_rule(
-        Name=rule_name,
-        ScheduleExpression=cron_expression,
-        State="ENABLED",
-    )
-
-    # Create a target that specifies running the ECS task
-    target = {
-        "Id": "ecs-task",
-        "Arn": "arn:aws:ecs:us-east-1:906106360222:cluster/pl-test",
-        "RoleArn": "arn:aws:iam::906106360222:role/ecsEventsRole",
-        "EcsParameters": {
-            "TaskDefinitionArn": "arn:aws:ecs:us-east-1:906106360222:task-definition/pl-test",
-            "LaunchType": "FARGATE",
-            "NetworkConfiguration": {
-                "awsvpcConfiguration": {
-                    "Subnets": [
-                        "subnet-0fb1b8c58be33df1a",
-                        "subnet-035b586c3e4234428",
-                        "subnet-001cd3ddfb7fdb513",
-                        "subnet-021cc5eb1fc884082",
-                        "subnet-04190380e690f6692",
-                        "subnet-0d686127820281836",
-                    ],
-                    "AssignPublicIp": "ENABLED",
-                    "SecurityGroups": ["sg-00c09ab7842b3685d"],
-                }
-            },
-            "PlatformVersion": "LATEST",
-        },
-        "Input": json.dumps(
-            {
-                "containerOverrides": [
-                    {
-                        "name": "pl-inference",
-                        "command": commands,
-                        "environment": [
-                            {"name": "S3_PREFIX", "value": S3_PREFIX},
-                        ],
-                    },
-                ],
-            }
-        ),
+    # Define the payload to pass to the lambda function
+    payload = {
+        "timestamp": time.strftime("cron(%M %H %d %m ? %Y)"),
+        "commands": commands,
+        "s3_prefix": S3_PREFIX,
     }
 
-    # Add the ECS task as a target for the EventBridge rule
-    eventbridge_client.put_targets(Rule=rule_name, Targets=[target])
+    # Invoke the Lambda function
+    response = lambda_client.invoke(
+        FunctionName="your_lambda_function_name",
+        InvocationType="RequestResponse",
+        Payload=json.dumps(payload),
+    )
 
-    print(f"Next task scheduled via EventBridge: {response}")
+    # Print response
+    print("Next task schedule response:", response["Payload"].read().decode("utf-8"))
 
 
 def upload_model_and_scaler_to_s3(
