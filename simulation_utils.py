@@ -1218,7 +1218,7 @@ def schedule_next_simulation(
 
     # Invoke the Lambda function
     response = lambda_client.invoke(
-        FunctionName="your_lambda_function_name",
+        FunctionName="schedule_pl_sim",
         InvocationType="RequestResponse",
         Payload=json.dumps(payload),
     )
