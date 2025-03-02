@@ -24,6 +24,7 @@ from simulation_utils import (
     get_starts_of_next_matchweeks,
     get_upcoming_probabilities,
     process_finished_matches,
+    process_mathematical_table_positions,
     schedule_next_simulation,
     simulate_and_get_results,
 )
@@ -112,6 +113,11 @@ def main():
         best_params.decay_method,
     )
     current_season_state = current_season_state.copy()
+
+    # Process mathematical table positions
+    team_to_points = process_mathematical_table_positions(
+        current_season_state.df, team_to_points
+    )
 
     # Get updated matchweek predictions
     df_upcoming = get_upcoming_probabilities(current_season_state, matchweek_starts)

@@ -656,6 +656,64 @@ def apply_decay_factor(elo: float, half_life: int, decay_method: DecayMethod) ->
             return elo * decay_factor + min(1500, elo) * (1 - decay_factor)
 
 
+def process_mathematical_table_positions(
+    df: pd.DataFrame, team_to_points: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Calculate matches played, max points, min position, and max position for each team
+    in the team_to_points dataframe using the finished matches in the dataframe.
+    """
+    df = df.copy()
+
+    number_of_teams = len(team_to_points)
+
+    # Initialize the mathematical table position columns
+    team_to_points["matches_played"] = 0
+    team_to_points["max_points"] = 0
+    team_to_points["min_possible_position"] = number_of_teams
+    team_to_points["max_possible_position"] = 1
+
+    # Calculate the total matches played over the season
+    total_matches = (number_of_teams - 1) * 2
+
+    # Calculate the matches played for each team
+    for _, match in df[df["status"] == "FINISHED"].iterrows():
+        team_to_points.loc[match["home"], "matches_played"] += 1
+        team_to_points.loc[match["away"], "matches_played"] += 1
+
+    # Calculate the max points for each team
+    team_to_points["max_points"] = (
+        total_matches - team_to_points["matches_played"]
+    ) * 3 + team_to_points["points"]
+
+    # Calculate the min and max possible positions for each team
+    for team in team_to_points.index:
+        team_points = team_to_points.loc[team, "points"]
+        team_max_points = team_to_points.loc[team, "max_points"]
+
+        # Calculate the min possible position
+        team_to_min_points = team_to_points["max_points"].to_dict()
+        team_to_min_points[team] = team_points
+        team_to_points.loc[team, "min_possible_position"] = (
+            sorted(team_to_min_points.items(), key=lambda x: x[1], reverse=True).index(
+                (team, team_points)
+            )
+            + 1
+        )
+
+        # Calculate the max possible position
+        team_to_max_points = team_to_points["points"].to_dict()
+        team_to_max_points[team] = team_max_points
+        team_to_points.loc[team, "max_possible_position"] = (
+            sorted(team_to_max_points.items(), key=lambda x: x[1], reverse=True).index(
+                (team, team_max_points)
+            )
+            + 1
+        )
+
+    return team_to_points
+
+
 def get_match_probabilities(
     home_elo: float,
     away_elo: float,
