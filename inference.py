@@ -263,7 +263,7 @@ def main():
     invalidate_cache_auth = simulation_config.invalidate_cache_auth
     if invalidate_cache_url and invalidate_cache_auth:
         print(f"Calling cache invalidation hook {invalidate_cache_url}")
-        requests.post(
+        res = requests.post(
             invalidate_cache_url,
             headers={
                 "Authorization": f"Bearer {invalidate_cache_auth}",
@@ -271,6 +271,11 @@ def main():
             },
             json={"tag": "football-data"},
         )
+
+        if res.status_code == 200:
+            print("Cache invalidated successfully")
+        else:
+            print(f"Failed to invalidate cache: ({res.status_code}) {res.text}")
     else:
         print("No cache invalidation hook and/or auth provided")
 
