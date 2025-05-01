@@ -693,21 +693,24 @@ def process_mathematical_table_positions(
 
         # Calculate the min possible position
         team_to_min_points = team_to_points["max_points"].to_dict()
-        team_to_min_points[team] = team_points
+        # Pop the current team from the dictionary
+        team_to_min_points.pop(team, None)
         team_to_points.loc[team, "min_possible_position"] = (
-            sorted(team_to_min_points.items(), key=lambda x: x[1], reverse=True).index(
-                (team, team_points)
-            )
+            # Sum the number of teams with max points ahead of this team's current points
+            # Assume the other team will overcome this team's goal difference
+            sum(1 for points in team_to_min_points.values() if points >= team_points)
             + 1
         )
 
         # Calculate the max possible position
         team_to_max_points = team_to_points["points"].to_dict()
-        team_to_max_points[team] = team_max_points
+        # Pop the current team from the dictionary
+        team_to_max_points.pop(team, None)
         team_to_points.loc[team, "max_possible_position"] = (
-            sorted(team_to_max_points.items(), key=lambda x: x[1], reverse=True).index(
-                (team, team_max_points)
-            )
+            # Sum the number of teams ahead of this team's max points
+            # Ties are assumed to be overcome by goal difference
+            sum(1 for points in team_to_max_points.values() if points > team_max_points)
+            # Add 1 to make this a 1-indexed position (a league table position)
             + 1
         )
 
