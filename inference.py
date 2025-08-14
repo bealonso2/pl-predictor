@@ -30,7 +30,7 @@ from simulation_utils import (
 )
 
 # Define the seasons I need data for
-SEASONS = [2024]
+SEASONS = [2025]
 
 
 def main():
