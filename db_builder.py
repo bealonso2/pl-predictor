@@ -149,7 +149,10 @@ def update_results_and_club_values(
 def update_manager_tenure():
     # Get the data from the website
     url = "https://en.wikipedia.org/wiki/List_of_Premier_League_managers"
-    response = requests.get(url)
+    headers = {
+        "User-Agent": "PL Predictor/0.0 (https://github.com/bealonso2/pl-predictor; brian@alonsodev.co)"
+    }
+    response = requests.get(url, headers=headers)
     soup = bs4.BeautifulSoup(response.text, "html.parser")
 
     # Get the table with classes wikitable sortable plainrowheaders jquery-tablesorter
