@@ -1242,8 +1242,7 @@ def download_best_params_from_s3() -> BestParams:
 
 @dataclass
 class SimulationConfig:
-    invalidate_cache_url: str
-    invalidate_cache_auth: str
+    deployment_hook: str
     commands: list[str]
 
 
@@ -1259,8 +1258,7 @@ def download_simulation_config_from_s3() -> SimulationConfig:
     config_file.unlink()
 
     return SimulationConfig(
-        invalidate_cache_url=config.get("invalidate_cache_url", ""),
-        invalidate_cache_auth=config.get("invalidate_cache_auth", ""),
+        deployment_hook=config.get("deployment_hook", ""),
         commands=config.get("commands", ["python", "inference.py"]),
     )
 

@@ -259,25 +259,16 @@ def main():
     simulation_config = download_simulation_config_from_s3()
 
     # If a deployment hook is provided, call it
-    invalidate_cache_url = simulation_config.invalidate_cache_url
-    invalidate_cache_auth = simulation_config.invalidate_cache_auth
-    if invalidate_cache_url and invalidate_cache_auth:
-        print(f"Calling cache invalidation hook {invalidate_cache_url}")
-        res = requests.post(
-            invalidate_cache_url,
-            headers={
-                "Authorization": f"Bearer {invalidate_cache_auth}",
-                "Content-Type": "application/json",
-            },
-            json={"tag": "football-data"},
-        )
-
+    deployment_hook = simulation_config.deployment_hook
+    if deployment_hook:
+        print(f"Calling deployment hook {deployment_hook}")
+        res = requests.post(deployment_hook)
         if res.status_code == 200:
             print("Cache invalidated successfully")
         else:
             print(f"Failed to invalidate cache: ({res.status_code}) {res.text}")
     else:
-        print("No cache invalidation hook and/or auth provided")
+        print("No redeploy hook provided")
 
     # Schedule the next job on ECS
     if next_job:
